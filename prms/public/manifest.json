@@ -1,0 +1,17 @@
+{
+    "name": "PRMS",
+    "short_name": "PRMS",
+    "description": "Policy Review and Monitoring System",
+    "start_url": "/dashboard",
+    "display": "standalone",
+    "background_color": "#1e1e2f",
+    "theme_color": "#1e1e2f",
+    "orientation": "portrait-primary",
+    "icons": [
+        {
+            "src": "/favicon.ico",
+            "sizes": "64x64",
+            "type": "image/x-icon"
+        }
+    ]
+}

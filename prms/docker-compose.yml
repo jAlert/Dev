@@ -1,0 +1,130 @@
+services:
+
+  app:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: prms-app
+    container_name: prms_app
+    restart: unless-stopped
+    working_dir: /var/www
+    volumes:
+      - .:/var/www
+      - prms_vendor:/var/www/vendor          # keep container's vendor, not host's
+      - prms_node_modules:/var/www/node_modules    # keep container's node_modules
+      - prms_build:/var/www/public/build     # shared build volume with nginx
+    env_file:
+      - .env
+    depends_on:
+      mysql:
+        condition: service_healthy
+    networks:
+      - prms
+
+  nginx:
+    image: nginx:alpine
+    container_name: prms_nginx
+    restart: unless-stopped
+    ports:
+      - "8080:80"
+    volumes:
+      - .:/var/www
+      - prms_build:/var/www/public/build     # compiled assets from app container
+      - ./docker/nginx/default.conf:/etc/nginx/conf.d/default.conf
+    depends_on:
+      - app
+    networks:
+      - prms
+
+  mysql:
+    image: mysql:8.0
+    container_name: prms_mysql
+    restart: unless-stopped
+    environment:
+      MYSQL_DATABASE: ${DB_DATABASE:-prms}
+      MYSQL_USER: ${DB_USERNAME:-prms}
+      MYSQL_PASSWORD: ${DB_PASSWORD:-secret}
+      MYSQL_ROOT_PASSWORD: ${DB_ROOT_PASSWORD:-rootsecret}
+    ports:
+      - "3307:3306"   # 3307 on host to avoid conflicts with local MySQL
+    volumes:
+      - prms_mysql_data:/var/lib/mysql
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+    networks:
+      - prms
+
+  queue:
+    image: prms-app
+    container_name: prms_queue
+    restart: unless-stopped
+    working_dir: /var/www
+    command: php artisan queue:work --sleep=3 --tries=3 --max-time=3600
+    volumes:
+      - .:/var/www
+      - prms_vendor:/var/www/vendor
+      - prms_node_modules:/var/www/node_modules
+    env_file:
+      - .env
+    depends_on:
+      - app
+      - mysql
+    networks:
+      - prms
+
+  scheduler:
+    image: prms-app
+    container_name: prms_scheduler
+    restart: unless-stopped
+    working_dir: /var/www
+    command: sh -c "while true; do php artisan schedule:run --no-interaction; sleep 60; done"
+    volumes:
+      - .:/var/www
+      - prms_vendor:/var/www/vendor
+      - prms_node_modules:/var/www/node_modules
+    env_file:
+      - .env
+    depends_on:
+      - app
+      - mysql
+    networks:
+      - prms
+
+  hocuspocus:
+    build:
+      context: ./hocuspocus
+      dockerfile: Dockerfile
+    ports:
+      - "1234:1234"
+    environment:
+      DB_HOST: mysql
+      DB_DATABASE: prms
+      DB_USER: prms
+      DB_PASSWORD: secret
+      DB_PREFIX: jea_
+      APP_URL: http://nginx
+    depends_on:
+      mysql:
+        condition: service_healthy
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://127.0.0.1:1234/ || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 15s
+    networks:
+      - prms
+
+volumes:
+  prms_mysql_data:
+  prms_vendor:
+  prms_node_modules:
+  prms_build:
+
+networks:
+  prms:
+    driver: bridge
