@@ -134,6 +134,78 @@
                         <label for="final" class="text-sm font-medium text-gray-700">This is the final approval stage</label>
                     </div>
                 </div>
+                {{-- Email Notifications on Stage Enter --}}
+                <div class="md:col-span-2 border rounded-lg p-4 bg-amber-50 space-y-3">
+                    <div class="flex items-center justify-between">
+                        <p class="text-sm font-semibold text-amber-800">Email Notifications on Stage Enter
+                            <span class="font-normal text-amber-600 text-xs ml-1">— sent when a record enters this stage</span>
+                        </p>
+                        <button type="button" wire:click="addNotifyRecipient"
+                            class="text-xs bg-amber-600 text-white px-2.5 py-1 rounded hover:bg-amber-700 font-bold">
+                            + Add Recipient
+                        </button>
+                    </div>
+                    @if(empty($notifyRecipients))
+                        <p class="text-xs text-amber-400 italic">No recipients — click "+ Add Recipient" to configure who gets emailed when a record enters this stage.</p>
+                    @else
+                        <div class="space-y-2">
+                            @foreach($notifyRecipients as $i => $r)
+                            <div class="flex items-start gap-3 bg-white rounded p-3 border border-amber-200">
+                                <div class="flex-1 grid grid-cols-1 md:grid-cols-2 gap-3">
+                                    <div>
+                                        <label class="block text-xs font-medium text-gray-600">Recipient Type</label>
+                                        <select wire:model.live="notifyRecipients.{{ $i }}.type"
+                                            class="mt-1 block w-full rounded border-gray-300 shadow-sm focus:border-amber-500 focus:ring-amber-500 text-sm">
+                                            <option value="submitter">Submitter (record creator)</option>
+                                            <option value="role">Role</option>
+                                            <option value="specific_user">Specific User</option>
+                                            <option value="specific_email">Specific Email</option>
+                                        </select>
+                                    </div>
+                                    @if(($r['type'] ?? 'submitter') === 'role')
+                                    <div>
+                                        <label class="block text-xs font-medium text-gray-600">Role</label>
+                                        <select wire:model="notifyRecipients.{{ $i }}.value"
+                                            class="mt-1 block w-full rounded border-gray-300 shadow-sm focus:border-amber-500 focus:ring-amber-500 text-sm">
+                                            <option value="">— select role —</option>
+                                            @foreach($roles as $role)
+                                                <option value="{{ $role->name }}">{{ $role->name }}</option>
+                                            @endforeach
+                                        </select>
+                                    </div>
+                                    @elseif(($r['type'] ?? '') === 'specific_user')
+                                    <div>
+                                        <label class="block text-xs font-medium text-gray-600">User</label>
+                                        <select wire:model="notifyRecipients.{{ $i }}.value"
+                                            class="mt-1 block w-full rounded border-gray-300 shadow-sm focus:border-amber-500 focus:ring-amber-500 text-sm">
+                                            <option value="">— select user —</option>
+                                            @foreach($users as $user)
+                                                <option value="{{ $user->id }}">{{ $user->name }}{{ $user->email ? ' (' . $user->email . ')' : '' }}</option>
+                                            @endforeach
+                                        </select>
+                                    </div>
+                                    @elseif(($r['type'] ?? '') === 'specific_email')
+                                    <div>
+                                        <label class="block text-xs font-medium text-gray-600">Email Address</label>
+                                        <input type="email" wire:model="notifyRecipients.{{ $i }}.value"
+                                            placeholder="e.g. admin@example.com"
+                                            class="mt-1 block w-full rounded border-gray-300 shadow-sm focus:border-amber-500 focus:ring-amber-500 text-sm">
+                                    </div>
+                                    @else
+                                    <div class="flex items-end pb-1">
+                                        <p class="text-xs text-gray-400 italic">The record creator's email will be used.</p>
+                                    </div>
+                                    @endif
+                                </div>
+                                <button type="button" wire:click="removeNotifyRecipient({{ $i }})"
+                                    class="mt-5 text-red-400 hover:text-red-600 text-sm font-bold leading-none">✕</button>
+                            </div>
+                            @endforeach
+                        </div>
+                    @endif
+                    <p class="text-xs text-amber-500">Requires SMTP configured in <code class="bg-amber-100 px-1 rounded">.env</code> — free options: Brevo, Resend, Gmail App Password.</p>
+                </div>
+
                 {{-- Stage Fields — custom fields filled by the reviewer in the approval panel --}}
                 <div class="md:col-span-2 border rounded-lg p-4 bg-teal-50 space-y-3">
                     <div class="flex items-center justify-between">
@@ -315,6 +387,9 @@
                                         @foreach($stage->branches_json as $b)
                                             <span class="px-1.5 py-0.5 rounded text-[10px] font-bold bg-purple-100 text-purple-700">⑂ {{ $b['label'] }}</span>
                                         @endforeach
+                                    @endif
+                                    @if(!empty($stage->notify_on_enter_json))
+                                        <span class="px-1.5 py-0.5 rounded text-[10px] font-bold bg-amber-100 text-amber-700">✉ {{ count($stage->notify_on_enter_json) }} notif{{ count($stage->notify_on_enter_json) > 1 ? 's' : '' }}</span>
                                     @endif
                                 </p>
                             </div>

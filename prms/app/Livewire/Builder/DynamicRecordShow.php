@@ -11,7 +11,10 @@ use App\Models\RecordHistory;
 use App\Models\RecordApproval;
 use App\Models\WorkflowStage;
 use App\Models\User;
+use App\Mail\StageNotificationMail;
 use App\Notifications\DynamicNotification;
+use Illuminate\Support\Facades\Log;
+use Illuminate\Support\Facades\Mail;
 use Spatie\Permission\Models\Role;
 use Livewire\Attributes\Layout;
 
@@ -108,7 +111,7 @@ class DynamicRecordShow extends Component
 
             if ($nextStage) {
                 $this->record->update(['status' => $nextStage->default_status ?? 'Under Review', 'current_stage_id' => $nextStage->id, 'stage_entered_at' => now()]);
-                $this->notifyStageApprovers($nextStage, "A record in {$this->module->name} has advanced and requires your approval.");
+                $this->notifyStageUsers($nextStage, "A record in {$this->module->name} has advanced and requires your approval.");
                 $this->approvalComment = '';
                 $this->dispatch('notify', type: 'success', message: 'Approved. Record advanced to next stage.');
                 return;
@@ -163,7 +166,7 @@ class DynamicRecordShow extends Component
         ]);
 
         if ($targetStage) {
-            $this->notifyStageApprovers($targetStage, "A record in {$this->module->name} has been forwarded ({$label}) and requires your action.");
+            $this->notifyStageUsers($targetStage, "A record in {$this->module->name} has been forwarded ({$label}) and requires your action.");
         }
 
         $this->approvalComment = '';
@@ -395,14 +398,51 @@ class DynamicRecordShow extends Component
         return $user->can("review-{$this->moduleSlug}");
     }
 
-    private function notifyStageApprovers(WorkflowStage $stage, string $message): void
+    private function notifyStageUsers(WorkflowStage $stage, string $message): void
     {
-        if (!$stage->approver_role_id) return;
-        $role = Role::find($stage->approver_role_id);
-        if (!$role) return;
-        foreach (User::role($role->name)->get() as $approver) {
-            $approver->notify(new DynamicNotification($message, $this->record->id, $this->moduleSlug));
+        $configured = $stage->notify_on_enter_json ?? [];
+
+        if (empty($configured)) {
+            // Legacy fallback: DB-notify approver role users only
+            if (!$stage->approver_role_id) return;
+            $role = Role::find($stage->approver_role_id);
+            if (!$role) return;
+            foreach (User::role($role->name)->get() as $approver) {
+                $approver->notify(new DynamicNotification($message, $this->record->id, $this->moduleSlug));
+            }
+            return;
         }
+
+        $recordUrl = $this->record->id && $this->moduleSlug
+            ? url("/app/{$this->moduleSlug}/{$this->record->id}")
+            : null;
+
+        foreach ($configured as $recipient) {
+            $type  = $recipient['type'] ?? '';
+            $value = $recipient['value'] ?? '';
+
+            try {
+                if ($type === 'submitter') {
+                    $this->sendStageNotification(User::find($this->record->created_by), $message, $recordUrl);
+                } elseif ($type === 'role' && $value) {
+                    foreach (User::role($value)->get() as $user) {
+                        $this->sendStageNotification($user, $message, $recordUrl);
+                    }
+                } elseif ($type === 'specific_user' && $value) {
+                    $this->sendStageNotification(User::find($value), $message, $recordUrl);
+                } elseif ($type === 'specific_email' && filter_var($value, FILTER_VALIDATE_EMAIL)) {
+                    Mail::to($value)->send(new StageNotificationMail($message, 'PRMS Notification', $recordUrl));
+                }
+            } catch (\Throwable $e) {
+                Log::warning('[notifyStageUsers] Failed type=' . $type . ': ' . $e->getMessage());
+            }
+        }
+    }
+
+    private function sendStageNotification(?User $user, string $message, ?string $recordUrl = null): void
+    {
+        if (!$user) return;
+        $user->notify(new DynamicNotification($message, $this->record->id, $this->moduleSlug, null, true));
     }
 
     #[Layout('layouts.app')]

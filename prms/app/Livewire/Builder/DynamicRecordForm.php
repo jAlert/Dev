@@ -11,7 +11,10 @@ use App\Models\RecordApproval;
 use App\Models\WorkflowStage;
 use App\Models\User;
 use App\Events\RecordSaved;
+use App\Mail\StageNotificationMail;
 use App\Notifications\DynamicNotification;
+use Illuminate\Support\Facades\Log;
+use Illuminate\Support\Facades\Mail;
 use Livewire\Attributes\Layout;
 use Livewire\WithFileUploads;
 use Spatie\Permission\Models\Role;
@@ -245,7 +248,7 @@ class DynamicRecordForm extends Component
             'action' => 'submitted',
         ]);
 
-        $this->notifyStageApprovers($firstStage, "A record in {$this->module->name} requires your approval.");
+        $this->notifyStageUsers($firstStage, "A record in {$this->module->name} requires your approval.");
 
         $this->status = 'Submitted';
         session()->flash('message', 'Record submitted for approval.');
@@ -288,7 +291,7 @@ class DynamicRecordForm extends Component
 
             if ($nextStage) {
                 $this->record->update(['status' => $nextStage->default_status ?? 'Under Review', 'current_stage_id' => $nextStage->id, 'stage_entered_at' => now()]);
-                $this->notifyStageApprovers($nextStage, "A record in {$this->module->name} has advanced and requires your approval.");
+                $this->notifyStageUsers($nextStage, "A record in {$this->module->name} has advanced and requires your approval.");
                 $this->status = $nextStage->default_status ?? 'Under Review';
                 $this->approvalComment = '';
                 session()->flash('message', 'Approved. Record advanced to next stage.');
@@ -350,7 +353,7 @@ class DynamicRecordForm extends Component
         ]);
 
         if ($targetStage) {
-            $this->notifyStageApprovers($targetStage, "A record in {$this->module->name} has been forwarded ({$label}) and requires your action.");
+            $this->notifyStageUsers($targetStage, "A record in {$this->module->name} has been forwarded ({$label}) and requires your action.");
         }
 
         $this->status = $targetStage?->default_status ?? 'Under Review';
@@ -487,14 +490,51 @@ class DynamicRecordForm extends Component
         abort(403);
     }
 
-    private function notifyStageApprovers(WorkflowStage $stage, string $message): void
+    private function notifyStageUsers(WorkflowStage $stage, string $message): void
     {
-        if (!$stage->approver_role_id) return;
-        $role = Role::find($stage->approver_role_id);
-        if (!$role) return;
-        foreach (User::role($role->name)->get() as $approver) {
-            $approver->notify(new DynamicNotification($message, $this->record->id, $this->moduleSlug));
+        $configured = $stage->notify_on_enter_json ?? [];
+
+        if (empty($configured)) {
+            // Legacy fallback: DB-notify approver role users only
+            if (!$stage->approver_role_id) return;
+            $role = Role::find($stage->approver_role_id);
+            if (!$role) return;
+            foreach (User::role($role->name)->get() as $approver) {
+                $approver->notify(new DynamicNotification($message, $this->record->id, $this->moduleSlug));
+            }
+            return;
         }
+
+        $recordUrl = $this->record->id && $this->moduleSlug
+            ? url("/app/{$this->moduleSlug}/{$this->record->id}")
+            : null;
+
+        foreach ($configured as $recipient) {
+            $type  = $recipient['type'] ?? '';
+            $value = $recipient['value'] ?? '';
+
+            try {
+                if ($type === 'submitter') {
+                    $this->sendStageNotification(User::find($this->record->created_by), $message);
+                } elseif ($type === 'role' && $value) {
+                    foreach (User::role($value)->get() as $user) {
+                        $this->sendStageNotification($user, $message);
+                    }
+                } elseif ($type === 'specific_user' && $value) {
+                    $this->sendStageNotification(User::find($value), $message);
+                } elseif ($type === 'specific_email' && filter_var($value, FILTER_VALIDATE_EMAIL)) {
+                    Mail::to($value)->send(new StageNotificationMail($message, 'PRMS Notification', $recordUrl));
+                }
+            } catch (\Throwable $e) {
+                Log::warning('[notifyStageUsers] Failed type=' . $type . ': ' . $e->getMessage());
+            }
+        }
+    }
+
+    private function sendStageNotification(?User $user, string $message): void
+    {
+        if (!$user) return;
+        $user->notify(new DynamicNotification($message, $this->record->id, $this->moduleSlug, null, true));
     }
 
     private function canReview(): bool

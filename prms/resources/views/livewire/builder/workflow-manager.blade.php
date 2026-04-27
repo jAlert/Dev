@@ -157,18 +157,65 @@
                             </div>
                         </div>
                     @elseif(($actions[$i]['type'] ?? '') === 'send_email')
-                        <div class="space-y-2">
-                            <div>
-                                <label class="block text-xs text-gray-600 mb-1">To Email</label>
-                                <input type="email" wire:model="actions.{{ $i }}.config_json.to" class="block w-full rounded border-gray-300 text-sm shadow-sm">
-                            </div>
+                        <div class="space-y-3">
                             <div>
                                 <label class="block text-xs text-gray-600 mb-1">Subject</label>
-                                <input type="text" wire:model="actions.{{ $i }}.config_json.subject" class="block w-full rounded border-gray-300 text-sm shadow-sm">
+                                <input type="text" wire:model="actions.{{ $i }}.config_json.subject" placeholder="Email subject..." class="block w-full rounded border-gray-300 text-sm shadow-sm">
                             </div>
                             <div>
                                 <label class="block text-xs text-gray-600 mb-1">Message</label>
-                                <textarea wire:model="actions.{{ $i }}.config_json.message" rows="2" class="block w-full rounded border-gray-300 text-sm shadow-sm"></textarea>
+                                <textarea wire:model="actions.{{ $i }}.config_json.message" rows="2" placeholder="Email body..." class="block w-full rounded border-gray-300 text-sm shadow-sm"></textarea>
+                            </div>
+                            <div>
+                                <div class="flex items-center justify-between mb-2">
+                                    <label class="block text-xs font-semibold text-gray-700">Recipients</label>
+                                    <button type="button" wire:click="addEmailRecipient({{ $i }})"
+                                        class="text-xs text-indigo-600 font-medium border border-indigo-300 rounded px-2 py-0.5 hover:bg-indigo-50 transition">
+                                        + Add Recipient
+                                    </button>
+                                </div>
+                                @if(empty($actions[$i]['config_json']['recipients'] ?? []))
+                                    <p class="text-xs text-gray-400 italic">No recipients added yet.</p>
+                                @endif
+                                @foreach($actions[$i]['config_json']['recipients'] ?? [] as $ri => $rec)
+                                <div class="flex items-center gap-2 mt-1.5">
+                                    <select wire:model.live="actions.{{ $i }}.config_json.recipients.{{ $ri }}.type"
+                                        class="rounded border-gray-300 text-xs shadow-sm w-36">
+                                        <option value="submitter">Submitter</option>
+                                        <option value="role">Role</option>
+                                        <option value="specific_user">Specific User</option>
+                                        <option value="specific_email">Specific Email</option>
+                                    </select>
+                                    @php $recType = $actions[$i]['config_json']['recipients'][$ri]['type'] ?? 'specific_email'; @endphp
+                                    @if($recType === 'role')
+                                        <select wire:model="actions.{{ $i }}.config_json.recipients.{{ $ri }}.value"
+                                            class="rounded border-gray-300 text-xs shadow-sm flex-1">
+                                            <option value="">-- Select Role --</option>
+                                            @foreach($roles as $role)
+                                                <option value="{{ $role->name }}">{{ $role->name }}</option>
+                                            @endforeach
+                                        </select>
+                                    @elseif($recType === 'specific_user')
+                                        <select wire:model="actions.{{ $i }}.config_json.recipients.{{ $ri }}.value"
+                                            class="rounded border-gray-300 text-xs shadow-sm flex-1">
+                                            <option value="">-- Select User --</option>
+                                            @foreach($users as $u)
+                                                <option value="{{ $u->id }}">{{ $u->name }} ({{ $u->email }})</option>
+                                            @endforeach
+                                        </select>
+                                    @elseif($recType === 'submitter')
+                                        <span class="text-xs text-gray-500 flex-1 italic">The user who created the record</span>
+                                    @else
+                                        <input type="email" wire:model="actions.{{ $i }}.config_json.recipients.{{ $ri }}.value"
+                                            placeholder="email@example.com"
+                                            class="rounded border-gray-300 text-xs shadow-sm flex-1">
+                                    @endif
+                                    <button type="button" wire:click="removeEmailRecipient({{ $i }}, {{ $ri }})"
+                                        class="text-red-400 hover:text-red-600 transition flex-shrink-0">
+                                        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/></svg>
+                                    </button>
+                                </div>
+                                @endforeach
                             </div>
                         </div>
                     @endif

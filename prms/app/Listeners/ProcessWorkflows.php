@@ -9,8 +9,10 @@ use App\Models\Webhook;
 use App\Models\WebhookLog;
 use App\Models\User;
 use App\Notifications\DynamicNotification;
+use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Mail;
 use Illuminate\Support\Facades\Http;
+use App\Mail\StageNotificationMail;
 
 class ProcessWorkflows
 {
@@ -170,14 +172,46 @@ class ProcessWorkflows
 
     private function handleSendEmail(WorkflowAction $action, RecordSaved $event, Workflow $workflow): void
     {
-        $to      = $action->config_json['to'] ?? null;
-        $subject = $action->config_json['subject'] ?? "Workflow Notification: {$workflow->name}";
-        $message = $action->config_json['message'] ?? "Workflow {$workflow->name} was triggered for Record #{$event->record->id}.";
+        $subject    = $action->config_json['subject'] ?? "Workflow Notification: {$workflow->name}";
+        $message    = $action->config_json['message'] ?? "Workflow {$workflow->name} was triggered for Record #{$event->record->id}.";
+        $recipients = $action->config_json['recipients'] ?? [];
+        $moduleSlug = $event->record->module?->slug;
+        $recordUrl  = $moduleSlug ? url("/app/{$moduleSlug}/{$event->record->id}") : null;
 
-        if ($to && filter_var($to, FILTER_VALIDATE_EMAIL)) {
-            Mail::raw($message, function ($m) use ($to, $subject) {
-                $m->to($to)->subject($subject);
-            });
+        // Legacy fallback: old single `to` field
+        if (empty($recipients) && !empty($action->config_json['to'])) {
+            $to = $action->config_json['to'];
+            if (filter_var($to, FILTER_VALIDATE_EMAIL)) {
+                try {
+                    Mail::to($to)->send(new StageNotificationMail($message, $subject, $recordUrl));
+                } catch (\Throwable $e) {
+                    Log::warning('[send_email workflow] Failed: ' . $e->getMessage());
+                }
+            }
+            return;
+        }
+
+        foreach ($recipients as $recipient) {
+            $type  = $recipient['type'] ?? '';
+            $value = $recipient['value'] ?? '';
+
+            try {
+                if ($type === 'submitter') {
+                    $user = User::find($event->record->created_by);
+                    $user?->notify(new DynamicNotification($message, $event->record->id, $moduleSlug, $subject, true));
+                } elseif ($type === 'role' && $value) {
+                    foreach (User::role($value)->get() as $user) {
+                        $user->notify(new DynamicNotification($message, $event->record->id, $moduleSlug, $subject, true));
+                    }
+                } elseif ($type === 'specific_user' && $value) {
+                    $user = User::find($value);
+                    $user?->notify(new DynamicNotification($message, $event->record->id, $moduleSlug, $subject, true));
+                } elseif ($type === 'specific_email' && filter_var($value, FILTER_VALIDATE_EMAIL)) {
+                    Mail::to($value)->send(new StageNotificationMail($message, $subject, $recordUrl));
+                }
+            } catch (\Throwable $e) {
+                Log::warning('[send_email workflow] Failed type=' . $type . ': ' . $e->getMessage());
+            }
         }
     }
 }

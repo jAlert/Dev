@@ -94,6 +94,19 @@ class WorkflowManager extends Component
         $this->actions = array_values($this->actions);
     }
 
+    public function addEmailRecipient(int $actionIndex): void
+    {
+        $this->actions[$actionIndex]['config_json']['recipients'][] = ['type' => 'specific_email', 'value' => ''];
+    }
+
+    public function removeEmailRecipient(int $actionIndex, int $recipientIndex): void
+    {
+        unset($this->actions[$actionIndex]['config_json']['recipients'][$recipientIndex]);
+        $this->actions[$actionIndex]['config_json']['recipients'] = array_values(
+            $this->actions[$actionIndex]['config_json']['recipients'] ?? []
+        );
+    }
+
     public function save(): void
     {
         $this->validate([

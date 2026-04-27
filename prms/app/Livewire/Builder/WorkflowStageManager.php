@@ -4,6 +4,7 @@ namespace App\Livewire\Builder;
 
 use Livewire\Component;
 use App\Models\Module;
+use App\Models\User;
 use App\Models\WorkflowStage;
 use App\Models\WorkflowStageTemplate;
 use Spatie\Permission\Models\Role;
@@ -15,6 +16,7 @@ class WorkflowStageManager extends Component
 
     public $stages = [];
     public $roles = [];
+    public $users = [];
     public $templates = [];
 
     // Template save dialog
@@ -35,6 +37,7 @@ class WorkflowStageManager extends Component
     public $stageType = 'approval';
     public $autoAdvanceDays = null;
     public $branches = [];
+    public $notifyRecipients = [];
 
     public function mount(Module $module)
     {
@@ -49,6 +52,7 @@ class WorkflowStageManager extends Component
             ->orderBy('order')
             ->get();
         $this->roles     = Role::where('name', '!=', 'super admin')->get();
+        $this->users     = User::orderBy('name')->get(['id', 'name', 'email']);
         $this->templates = WorkflowStageTemplate::orderByDesc('created_at')->get();
     }
 
@@ -67,6 +71,7 @@ class WorkflowStageManager extends Component
         $this->stageType = 'approval';
         $this->autoAdvanceDays = null;
         $this->branches = [];
+        $this->notifyRecipients = [];
     }
 
     public function edit($id): void
@@ -96,6 +101,10 @@ class WorkflowStageManager extends Component
             fn($b) => ['label' => $b['label'] ?? '', 'stage_id' => (string) ($b['stage_id'] ?? '')],
             $stage->branches_json ?? []
         );
+        $this->notifyRecipients = array_map(
+            fn($r) => ['type' => $r['type'] ?? 'submitter', 'value' => (string) ($r['value'] ?? '')],
+            $stage->notify_on_enter_json ?? []
+        );
     }
 
     public function addBranch(): void
@@ -106,6 +115,16 @@ class WorkflowStageManager extends Component
     public function removeBranch($index): void
     {
         array_splice($this->branches, $index, 1);
+    }
+
+    public function addNotifyRecipient(): void
+    {
+        $this->notifyRecipients[] = ['type' => 'submitter', 'value' => ''];
+    }
+
+    public function removeNotifyRecipient($index): void
+    {
+        array_splice($this->notifyRecipients, $index, 1);
     }
 
     public function addStageField(): void
@@ -154,10 +173,11 @@ class WorkflowStageManager extends Component
                 'has_return_button'  => $this->hasReturnButton,
                 'allow_edit'         => $this->allowEdit,
                 'default_status'     => $this->defaultStatus ?: null,
-                'stage_fields_json'  => $this->buildStageFields(),
-                'stage_type'         => $this->stageType,
-                'auto_advance_days' => $this->autoAdvanceDays ?: null,
-                'branches_json'    => empty($branches) ? null : $branches,
+                'stage_fields_json'    => $this->buildStageFields(),
+                'stage_type'           => $this->stageType,
+                'auto_advance_days'    => $this->autoAdvanceDays ?: null,
+                'branches_json'        => empty($branches) ? null : $branches,
+                'notify_on_enter_json' => $this->buildNotifyRecipients(),
             ]
         );
 
@@ -203,9 +223,10 @@ class WorkflowStageManager extends Component
                 'has_return_button' => $s->has_return_button,
                 'allow_edit'        => $s->allow_edit,
                 'default_status'    => $s->default_status,
-                'auto_advance_days' => $s->auto_advance_days,
-                'stage_fields_json' => $s->stage_fields_json,
-                'branches_json'     => $s->branches_json,
+                'auto_advance_days'    => $s->auto_advance_days,
+                'stage_fields_json'    => $s->stage_fields_json,
+                'branches_json'        => $s->branches_json,
+                'notify_on_enter_json' => $s->notify_on_enter_json,
             ])->values()->all();
 
         WorkflowStageTemplate::create([
@@ -251,14 +272,34 @@ class WorkflowStageManager extends Component
                 'allow_edit'        => $s['allow_edit'] ?? true,
                 'default_status'    => $s['default_status'] ?? null,
                 'auto_advance_days' => $s['auto_advance_days'] ?? null,
-                'stage_fields_json' => $s['stage_fields_json'] ?? null,
-                'branches_json'     => null, // branches reference stage IDs; can't port across modules
+                'stage_fields_json'    => $s['stage_fields_json'] ?? null,
+                'branches_json'        => null, // branches reference stage IDs; can't port across modules
+                'notify_on_enter_json' => $s['notify_on_enter_json'] ?? null,
             ]);
         }
 
         $this->loadData();
         $this->createNew();
         session()->flash('message', 'Template applied. Branch paths were cleared (stage IDs differ between modules).');
+    }
+
+    private function buildNotifyRecipients(): ?array
+    {
+        $recipients = [];
+        foreach ($this->notifyRecipients as $r) {
+            $type = $r['type'] ?? '';
+            if (!$type) continue;
+            // Types without a value field
+            if ($type === 'submitter') {
+                $recipients[] = ['type' => 'submitter', 'value' => ''];
+                continue;
+            }
+            $value = trim($r['value'] ?? '');
+            if ($value === '') continue;
+            if ($type === 'specific_email' && !filter_var($value, FILTER_VALIDATE_EMAIL)) continue;
+            $recipients[] = ['type' => $type, 'value' => $value];
+        }
+        return empty($recipients) ? null : $recipients;
     }
 
     private function buildStageFields(): ?array
