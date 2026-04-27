@@ -270,6 +270,23 @@
                                                 <span class="text-sm font-medium text-gray-700">Show in table</span>
                                             </label>
 
+                                            {{-- Column width --}}
+                                            <div class="flex items-center gap-1.5">
+                                                <span class="text-xs text-gray-500 font-medium">Width:</span>
+                                                <div class="flex border border-gray-300 rounded-md overflow-hidden text-xs">
+                                                    <button type="button"
+                                                        wire:click="$set('fields.{{ $index }}.col_span', 1)"
+                                                        class="px-2.5 py-1 transition {{ ($fields[$index]['col_span'] ?? 1) == 1 ? 'bg-indigo-600 text-white font-semibold' : 'bg-white text-gray-600 hover:bg-gray-50' }}">
+                                                        ½ Col
+                                                    </button>
+                                                    <button type="button"
+                                                        wire:click="$set('fields.{{ $index }}.col_span', 2)"
+                                                        class="px-2.5 py-1 border-l border-gray-300 transition {{ ($fields[$index]['col_span'] ?? 1) == 2 ? 'bg-indigo-600 text-white font-semibold' : 'bg-white text-gray-600 hover:bg-gray-50' }}">
+                                                        Full
+                                                    </button>
+                                                </div>
+                                            </div>
+
                                             <label class="flex items-center gap-2 cursor-pointer">
                                                 <input type="checkbox" wire:model.live="fields.{{ $index }}.has_visibility"
                                                     class="rounded border-gray-300 text-indigo-600 text-sm">

@@ -5,6 +5,7 @@ namespace App\Livewire\Builder;
 use Livewire\Component;
 use App\Models\Module;
 use App\Models\WorkflowStage;
+use App\Models\WorkflowStageTemplate;
 use Spatie\Permission\Models\Role;
 use Livewire\Attributes\Layout;
 
@@ -14,6 +15,11 @@ class WorkflowStageManager extends Component
 
     public $stages = [];
     public $roles = [];
+    public $templates = [];
+
+    // Template save dialog
+    public $savingTemplate = false;
+    public $newTemplateName = '';
 
     // Form
     public $editingId = null;
@@ -42,7 +48,8 @@ class WorkflowStageManager extends Component
             ->with('approverRole')
             ->orderBy('order')
             ->get();
-        $this->roles = Role::where('name', '!=', 'super admin')->get();
+        $this->roles     = Role::where('name', '!=', 'super admin')->get();
+        $this->templates = WorkflowStageTemplate::orderByDesc('created_at')->get();
     }
 
     public function createNew(): void
@@ -166,41 +173,92 @@ class WorkflowStageManager extends Component
         $this->loadData();
     }
 
-    public function saveTemplate(): mixed
+    public function openSaveTemplate(): void
     {
+        $this->newTemplateName = $this->module->name . ' — ' . now()->format('M d, Y');
+        $this->savingTemplate  = true;
+    }
+
+    public function cancelSaveTemplate(): void
+    {
+        $this->savingTemplate  = false;
+        $this->newTemplateName = '';
+    }
+
+    public function confirmSaveTemplate(): void
+    {
+        $this->validate(['newTemplateName' => 'required|string|max:255']);
+
         $stages = WorkflowStage::where('module_id', $this->module->id)
             ->with('approverRole', 'reviewerRole')
             ->orderBy('order')
             ->get()
             ->map(fn($s) => [
-                'name'               => $s->name,
-                'order'              => $s->order,
-                'stage_type'         => $s->stage_type,
-                'approver_role'      => $s->approverRole?->name,
-                'reviewer_role'      => $s->reviewerRole?->name,
-                'is_final_approval'  => $s->is_final_approval,
-                'has_return_button'  => $s->has_return_button,
-                'allow_edit'         => $s->allow_edit,
-                'default_status'     => $s->default_status,
-                'auto_advance_days'  => $s->auto_advance_days,
-                'stage_fields_json'  => $s->stage_fields_json,
-                'branches_json'      => $s->branches_json,
+                'name'              => $s->name,
+                'order'             => $s->order,
+                'stage_type'        => $s->stage_type,
+                'approver_role'     => $s->approverRole?->name,
+                'reviewer_role'     => $s->reviewerRole?->name,
+                'is_final_approval' => $s->is_final_approval,
+                'has_return_button' => $s->has_return_button,
+                'allow_edit'        => $s->allow_edit,
+                'default_status'    => $s->default_status,
+                'auto_advance_days' => $s->auto_advance_days,
+                'stage_fields_json' => $s->stage_fields_json,
+                'branches_json'     => $s->branches_json,
+            ])->values()->all();
+
+        WorkflowStageTemplate::create([
+            'name'        => trim($this->newTemplateName),
+            'stages_json' => $stages,
+        ]);
+
+        $this->cancelSaveTemplate();
+        $this->loadData();
+        session()->flash('message', 'Template saved.');
+    }
+
+    public function deleteTemplate(int $id): void
+    {
+        WorkflowStageTemplate::destroy($id);
+        $this->loadData();
+    }
+
+    public function useTemplate(int $id): void
+    {
+        $template = WorkflowStageTemplate::findOrFail($id);
+
+        // Delete existing stages for this module
+        WorkflowStage::where('module_id', $this->module->id)->delete();
+
+        foreach ($template->stages_json as $s) {
+            $approverRole = $s['approver_role']
+                ? Role::where('name', $s['approver_role'])->first()
+                : null;
+            $reviewerRole = $s['reviewer_role']
+                ? Role::where('name', $s['reviewer_role'])->first()
+                : null;
+
+            WorkflowStage::create([
+                'module_id'         => $this->module->id,
+                'name'              => $s['name'],
+                'order'             => $s['order'],
+                'stage_type'        => $s['stage_type'] ?? 'approval',
+                'approver_role_id'  => $approverRole?->id,
+                'reviewer_role_id'  => $reviewerRole?->id,
+                'is_final_approval' => $s['is_final_approval'] ?? false,
+                'has_return_button' => $s['has_return_button'] ?? true,
+                'allow_edit'        => $s['allow_edit'] ?? true,
+                'default_status'    => $s['default_status'] ?? null,
+                'auto_advance_days' => $s['auto_advance_days'] ?? null,
+                'stage_fields_json' => $s['stage_fields_json'] ?? null,
+                'branches_json'     => null, // branches reference stage IDs; can't port across modules
             ]);
+        }
 
-        $payload = json_encode([
-            'module'      => $this->module->name,
-            'module_slug' => $this->module->slug,
-            'exported_at' => now()->toIso8601String(),
-            'stages'      => $stages,
-        ], JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE);
-
-        $filename = "stages_{$this->module->slug}_" . now()->format('Ymd_His') . '.json';
-
-        return response()->streamDownload(
-            fn() => print($payload),
-            $filename,
-            ['Content-Type' => 'application/json']
-        );
+        $this->loadData();
+        $this->createNew();
+        session()->flash('message', 'Template applied. Branch paths were cleared (stage IDs differ between modules).');
     }
 
     private function buildStageFields(): ?array

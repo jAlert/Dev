@@ -77,6 +77,10 @@ class UserManagement extends Component
         }
 
         if ($this->selectedUser) {
+            if ($this->selectedUser->email === env('ADMIN_EMAIL') && $this->email !== env('ADMIN_EMAIL')) {
+                $this->addError('email', 'The system admin email address cannot be changed.');
+                return;
+            }
             $this->selectedUser->update($data);
             $user = $this->selectedUser;
         } else {
@@ -103,6 +107,10 @@ class UserManagement extends Component
     public function toggleActive($id)
     {
         $user = User::findOrFail($id);
+        if ($user->email === env('ADMIN_EMAIL')) {
+            session()->flash('error', 'The system admin account cannot be deactivated.');
+            return;
+        }
         $user->update(['is_active' => !$user->is_active]);
         $this->loadData();
         if ($this->selectedUser?->id === $id) {

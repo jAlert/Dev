@@ -1,4 +1,4 @@
-import { Editor, Mark, Extension, mergeAttributes } from '@tiptap/core'
+import { Editor, Node, Mark, Extension, mergeAttributes } from '@tiptap/core'
 import StarterKit from '@tiptap/starter-kit'
 import Collaboration from '@tiptap/extension-collaboration'
 import CollaborationCursor from '@tiptap/extension-collaboration-cursor'
@@ -8,6 +8,10 @@ import TextStyle from '@tiptap/extension-text-style'
 import FontFamily from '@tiptap/extension-font-family'
 import Underline from '@tiptap/extension-underline'
 import Image from '@tiptap/extension-image'
+import Color from '@tiptap/extension-color'
+import Highlight from '@tiptap/extension-highlight'
+import Subscript from '@tiptap/extension-subscript'
+import Superscript from '@tiptap/extension-superscript'
 import Table from '@tiptap/extension-table'
 import TableRow from '@tiptap/extension-table-row'
 import TableHeader from '@tiptap/extension-table-header'
@@ -28,6 +32,8 @@ import {
   TableRow as DocxTableRow,
   TableCell as DocxTableCell,
   WidthType,
+  PageBreak as DocxPageBreak,
+  ShadingType,
 } from 'docx'
 import { saveAs } from 'file-saver'
 
@@ -132,6 +138,251 @@ const InlineComment = Mark.create({
   },
 })
 
+// LineSpacing — adds line-height attribute to paragraph and heading nodes
+const LineSpacing = Extension.create({
+  name: 'lineSpacing',
+  addOptions() { return { types: ['paragraph', 'heading'] } },
+  addGlobalAttributes() {
+    return [{
+      types: this.options.types,
+      attributes: {
+        lineSpacing: {
+          default: null,
+          parseHTML: el => el.style.lineHeight || null,
+          renderHTML: attrs => attrs.lineSpacing
+            ? { style: `line-height: ${attrs.lineSpacing}` } : {},
+        },
+      },
+    }]
+  },
+  addCommands() {
+    return {
+      setLineSpacing: value => ({ tr, state, dispatch }) => {
+        const { from, to } = state.selection
+        state.doc.nodesBetween(from, to, (node, pos) => {
+          if (['paragraph', 'heading'].includes(node.type.name)) {
+            if (dispatch) tr.setNodeMarkup(pos, null, { ...node.attrs, lineSpacing: value || null })
+          }
+        })
+        if (dispatch) dispatch(tr)
+        return true
+      },
+    }
+  },
+})
+
+// PageBreak — block atom node rendered as a dashed page-break divider
+const PageBreak = Node.create({
+  name: 'pageBreak',
+  group: 'block',
+  atom: true,
+  selectable: true,
+  draggable: true,
+  parseHTML() { return [{ tag: 'div[data-page-break]' }] },
+  renderHTML() { return ['div', { 'data-page-break': 'true', class: 'te-page-break' }] },
+  addCommands() {
+    return {
+      setPageBreak: () => ({ chain }) => chain().insertContent({ type: 'pageBreak' }).run(),
+    }
+  },
+  addKeyboardShortcuts() {
+    return {
+      'Ctrl-Enter': () => this.editor.commands.setPageBreak(),
+      'Mod-Enter':  () => this.editor.commands.setPageBreak(),
+    }
+  },
+})
+
+// ResizableImage — extends Image with width/height/align attrs and a drag-handle NodeView
+const ResizableImage = Image.extend({
+  addAttributes() {
+    return {
+      ...this.parent?.(),
+      width:  {
+        default: null,
+        parseHTML: el => el.getAttribute('width') || el.style.width?.replace('px','') || null,
+        renderHTML: attrs => attrs.width ? { width: attrs.width } : {},
+      },
+      height: {
+        default: null,
+        parseHTML: el => el.getAttribute('height') || el.style.height?.replace('px','') || null,
+        renderHTML: attrs => attrs.height ? { height: attrs.height } : {},
+      },
+      align: {
+        default: 'block',
+        parseHTML: el => el.dataset.align || 'block',
+        renderHTML: attrs => ({ 'data-align': attrs.align || 'block' }),
+      },
+    }
+  },
+  addNodeView() {
+    return ({ node, getPos, editor }) => {
+      let _dragging = false
+      let _currentNode = node
+
+      const wrapper = document.createElement('span')
+      wrapper.className = 'te-img-wrapper'
+
+      // Image context toolbar (alignment)
+      const imgToolbar = document.createElement('div')
+      imgToolbar.className = 'te-img-context-toolbar'
+      imgToolbar.innerHTML = `
+        <button type="button" data-img-align="inline"      title="Inline"       class="te-btn" style="font-size:10px;padding:2px 6px;min-height:22px">Inline</button>
+        <button type="button" data-img-align="float-left"  title="Float left"   class="te-btn" style="font-size:10px;padding:2px 6px;min-height:22px">◀ Left</button>
+        <button type="button" data-img-align="block"       title="Center block" class="te-btn" style="font-size:10px;padding:2px 6px;min-height:22px">⊞ Center</button>
+        <button type="button" data-img-align="float-right" title="Float right"  class="te-btn" style="font-size:10px;padding:2px 6px;min-height:22px">Right ▶</button>
+      `
+      imgToolbar.querySelectorAll('[data-img-align]').forEach(btn => {
+        btn.addEventListener('mousedown', e => {
+          e.preventDefault()
+          e.stopPropagation()
+          const align = btn.dataset.imgAlign
+          if (typeof getPos === 'function') {
+            const pos = getPos()
+            if (typeof pos === 'number') {
+              editor.chain().focus().command(({ tr }) => {
+                tr.setNodeMarkup(pos, null, { ..._currentNode.attrs, align })
+                return true
+              }).run()
+            }
+          }
+          applyAlignStyles(align)
+        })
+      })
+
+      const img = document.createElement('img')
+      img.style.display = 'block'
+      img.style.maxWidth = '100%'
+
+      // 8 resize handles
+      const HANDLES = ['nw','n','ne','e','se','s','sw','w']
+      const CURSORS  = { nw:'nw-resize',n:'n-resize',ne:'ne-resize',e:'e-resize',se:'se-resize',s:'s-resize',sw:'sw-resize',w:'w-resize' }
+      const handleEls = {}
+      HANDLES.forEach(pos => {
+        const h = document.createElement('span')
+        h.className = 'te-resize-handle'
+        h.dataset.handle = pos
+        const isN = pos.includes('n'), isS = pos.includes('s')
+        const isW = pos.includes('w'), isE = pos.includes('e')
+        h.style.top    = isN ? '-4px' : isS ? '' : 'calc(50% - 4px)'
+        h.style.bottom = isS ? '-4px' : ''
+        h.style.left   = isW ? '-4px' : isE ? '' : 'calc(50% - 4px)'
+        h.style.right  = isE ? '-4px' : ''
+        h.style.cursor = CURSORS[pos]
+        h.addEventListener('mousedown', e => {
+          e.preventDefault()
+          e.stopPropagation()
+          _dragging = true
+          const startX = e.clientX, startY = e.clientY
+          const startW = img.offsetWidth, startH = img.offsetHeight
+          const ratio  = startH / startW
+          const isCorner = pos.length === 2
+          const onMove = mv => {
+            const dx = mv.clientX - startX, dy = mv.clientY - startY
+            let newW = startW, newH = startH
+            if (pos.includes('e'))  newW = Math.max(20, startW + dx)
+            if (pos.includes('w'))  newW = Math.max(20, startW - dx)
+            if (pos.includes('s'))  newH = Math.max(20, startH + dy)
+            if (pos.includes('n'))  newH = Math.max(20, startH - dy)
+            if (isCorner) {
+              if (pos.includes('e') || pos.includes('w')) newH = Math.round(newW * ratio)
+              else newW = Math.round(newH / ratio)
+            }
+            img.style.width  = newW + 'px'
+            img.style.height = newH + 'px'
+            wrapper.style.width = newW + 'px'
+          }
+          const onUp = () => {
+            document.removeEventListener('mousemove', onMove)
+            document.removeEventListener('mouseup', onUp)
+            const finalW = img.offsetWidth, finalH = img.offsetHeight
+            _dragging = false
+            if (typeof getPos === 'function') {
+              const pos2 = getPos()
+              if (typeof pos2 === 'number') {
+                editor.chain().focus().command(({ tr }) => {
+                  tr.setNodeMarkup(pos2, null, { ..._currentNode.attrs, width: finalW, height: finalH })
+                  return true
+                }).run()
+              }
+            }
+          }
+          document.addEventListener('mousemove', onMove)
+          document.addEventListener('mouseup', onUp)
+        })
+        wrapper.appendChild(h)
+        handleEls[pos] = h
+      })
+
+      const showHandles = () => {
+        HANDLES.forEach(p => { handleEls[p].style.display = 'block' })
+        imgToolbar.classList.add('visible')
+        wrapper.style.outline = '2px solid #6366f1'
+        wrapper.style.outlineOffset = '2px'
+      }
+      const hideHandles = () => {
+        HANDLES.forEach(p => { handleEls[p].style.display = 'none' })
+        imgToolbar.classList.remove('visible')
+        wrapper.style.outline = ''
+      }
+
+      img.addEventListener('click', e => { e.stopPropagation(); showHandles() })
+      document.addEventListener('click', e => {
+        if (!wrapper.contains(e.target)) hideHandles()
+      })
+
+      const applyAlignStyles = (align) => {
+        if (align === 'block') {
+          wrapper.style.display    = 'block'
+          wrapper.style.float      = 'none'
+          wrapper.style.margin     = '8px auto'
+        } else if (align === 'float-left') {
+          wrapper.style.display    = 'block'
+          wrapper.style.float      = 'left'
+          wrapper.style.margin     = '4px 12px 4px 0'
+        } else if (align === 'float-right') {
+          wrapper.style.display    = 'block'
+          wrapper.style.float      = 'right'
+          wrapper.style.margin     = '4px 0 4px 12px'
+        } else { // inline
+          wrapper.style.display    = 'inline-block'
+          wrapper.style.float      = 'none'
+          wrapper.style.margin     = '0 2px'
+        }
+      }
+
+      // Initial render
+      img.src = node.attrs.src || ''
+      img.alt = node.attrs.alt || ''
+      if (node.attrs.width)  { img.style.width  = node.attrs.width  + 'px'; wrapper.style.width  = node.attrs.width  + 'px' }
+      if (node.attrs.height) { img.style.height = node.attrs.height + 'px' }
+      applyAlignStyles(node.attrs.align || 'block')
+
+      wrapper.appendChild(imgToolbar)
+      wrapper.appendChild(img)
+
+      return {
+        dom: wrapper,
+        contentDOM: null,
+        update(updatedNode) {
+          if (updatedNode.type !== node.type) return false
+          _currentNode = updatedNode
+          if (!_dragging) {
+            img.src = updatedNode.attrs.src || ''
+            img.alt = updatedNode.attrs.alt || ''
+            if (updatedNode.attrs.width)  { img.style.width  = updatedNode.attrs.width  + 'px'; wrapper.style.width  = updatedNode.attrs.width  + 'px' }
+            else { img.style.width = ''; wrapper.style.width = '' }
+            if (updatedNode.attrs.height) img.style.height = updatedNode.attrs.height + 'px'
+            else img.style.height = ''
+            applyAlignStyles(updatedNode.attrs.align || 'block')
+          }
+          return true
+        },
+      }
+    }
+  },
+})
+
 function generateUUID() {
   return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, c => {
     const r = Math.random() * 16 | 0
@@ -213,7 +464,13 @@ class TextEditorInstance {
       FontFamily,
       FontSize,
       Underline,
-      Image.configure({ inline: true, allowBase64: true }),
+      Color,
+      Highlight.configure({ multicolor: true }),
+      Subscript,
+      Superscript,
+      LineSpacing,
+      PageBreak,
+      ResizableImage.configure({ inline: true, allowBase64: true }),
       Table.configure({ resizable: true }),
       TableRow,
       TableHeader,
@@ -296,7 +553,7 @@ class TextEditorInstance {
         <!-- Toolbar wrap (sticky) -->
         <div class="te-toolbar-wrap">
 
-          <!-- Main toolbar row -->
+          <!-- Row 1: Text formatting -->
           <div class="te-toolbar-row">
             <button type="button" data-cmd="undo" title="Undo" class="te-btn">
               <svg xmlns="http://www.w3.org/2000/svg" class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="9 14 4 9 9 4"/><path d="M20 20v-7a4 4 0 0 0-4-4H4"/></svg>
@@ -333,8 +590,25 @@ class TextEditorInstance {
             <button type="button" data-cmd="italic" title="Italic" class="te-btn" style="font-style:italic;font-size:13px;min-width:28px">I</button>
             <button type="button" data-cmd="underline" title="Underline" class="te-btn" style="text-decoration:underline;font-size:13px;min-width:28px">U</button>
             <button type="button" data-cmd="strike" title="Strikethrough" class="te-btn" style="text-decoration:line-through;font-size:13px;min-width:28px">S</button>
+            <button type="button" data-cmd="subscript" title="Subscript" class="te-btn" style="font-size:12px;min-width:28px">X<sub style="font-size:8px">2</sub></button>
+            <button type="button" data-cmd="superscript" title="Superscript" class="te-btn" style="font-size:12px;min-width:28px">X<sup style="font-size:8px">2</sup></button>
             <span class="te-divider"></span>
 
+            <!-- Text color -->
+            <label title="Text color" class="te-btn te-color-btn" style="cursor:pointer;gap:2px;flex-direction:column;padding:3px 6px;position:relative">
+              <svg xmlns="http://www.w3.org/2000/svg" class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 3L5 21"/><path d="M19 3L9 21"/><line x1="5.5" y1="9" x2="18.5" y2="9"/></svg>
+              <span class="te-color-swatch" style="background:#000000"></span>
+              <input type="color" class="te-text-color-input" value="#000000" style="position:absolute;width:0;height:0;opacity:0;pointer-events:none">
+            </label>
+            <button type="button" data-cmd="unsetColor" title="Remove text color" class="te-btn" style="font-size:9px;padding:2px 4px;min-width:20px">✕A</button>
+
+            <!-- Highlight color -->
+            <label title="Highlight color" class="te-btn te-highlight-btn" style="cursor:pointer;gap:2px;flex-direction:column;padding:3px 6px;position:relative">
+              <svg xmlns="http://www.w3.org/2000/svg" class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 19V5"/><rect x="6" y="4" width="12" height="5" rx="1"/><path d="M9 19h6"/></svg>
+              <span class="te-highlight-swatch" style="background:#fef08a"></span>
+              <input type="color" class="te-highlight-color-input" value="#fef08a" style="position:absolute;width:0;height:0;opacity:0;pointer-events:none">
+            </label>
+            <button type="button" data-cmd="unsetHighlight" title="Remove highlight" class="te-btn" style="font-size:9px;padding:2px 4px;min-width:20px">✕H</button>
             <span class="te-divider"></span>
 
             <button type="button" data-cmd="bulletList" title="Bullet list" class="te-btn">
@@ -352,15 +626,16 @@ class TextEditorInstance {
             <button type="button" data-cmd="blockquote" title="Blockquote" class="te-btn">
               <svg xmlns="http://www.w3.org/2000/svg" class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 21c3 0 7-1 7-8V5c0-1.25-.756-2.017-2-2H4c-1.25 0-2 .75-2 1.972V11c0 1.25.75 2 2 2 1 0 1 0 1 1v1c0 1-1 2-2 2s-1 .008-1 1.031V20c0 1 0 1 1 1z"/><path d="M15 21c3 0 7-1 7-8V5c0-1.25-.757-2.017-2-2h-4c-1.25 0-2 .75-2 1.972V11c0 1.25.75 2 2 2h.75c0 2.25.25 4-2.75 4v3c0 1 0 1 1 1z"/></svg>
             </button>
-            <span class="te-divider"></span>
-
-            <button type="button" data-cmd="image" title="${isNew ? 'Save the record first to insert images' : 'Insert image'}" class="te-btn" ${isNew ? 'disabled' : ''}>
-              <svg xmlns="http://www.w3.org/2000/svg" class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/><polyline points="21 15 16 10 5 21"/></svg>
+            <button type="button" data-cmd="horizontalRule" title="Horizontal rule" class="te-btn">
+              <svg xmlns="http://www.w3.org/2000/svg" class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="3" y1="12" x2="21" y2="12"/></svg>
             </button>
-            <button type="button" data-cmd="table" title="Insert table" class="te-btn">
-              <svg xmlns="http://www.w3.org/2000/svg" class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="18" height="18" rx="1"/><line x1="3" y1="9" x2="21" y2="9"/><line x1="3" y1="15" x2="21" y2="15"/><line x1="9" y1="3" x2="9" y2="21"/><line x1="15" y1="3" x2="15" y2="21"/></svg>
-            </button>
+          </div>
 
+          <!-- Row 2: Structure / layout -->
+          <div class="te-toolbar-row" style="border-top:1px solid #f0f0f0;padding-top:2px">
+            <button type="button" data-cmd="h1" title="Heading 1" class="te-btn" style="font-size:11px;font-weight:700;min-width:28px">H1</button>
+            <button type="button" data-cmd="h2" title="Heading 2" class="te-btn" style="font-size:11px;font-weight:700;min-width:28px">H2</button>
+            <button type="button" data-cmd="h3" title="Heading 3" class="te-btn" style="font-size:11px;font-weight:700;min-width:28px">H3</button>
             <span class="te-divider"></span>
 
             <button type="button" data-cmd="alignLeft" title="Align left" class="te-btn">
@@ -374,6 +649,27 @@ class TextEditorInstance {
             </button>
             <button type="button" data-cmd="alignJustify" title="Justify" class="te-btn">
               <svg xmlns="http://www.w3.org/2000/svg" class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="18" x2="21" y2="18"/></svg>
+            </button>
+            <span class="te-divider"></span>
+
+            <select class="te-line-spacing te-select" title="Line spacing" style="width:80px">
+              <option value="">≡ Spacing</option>
+              <option value="1">1.0</option>
+              <option value="1.15">1.15</option>
+              <option value="1.5">1.5</option>
+              <option value="2">2.0</option>
+            </select>
+            <span class="te-divider"></span>
+
+            <button type="button" data-cmd="image" title="Insert image" class="te-btn">
+              <svg xmlns="http://www.w3.org/2000/svg" class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/><polyline points="21 15 16 10 5 21"/></svg>
+            </button>
+            <button type="button" data-cmd="table" title="Insert table" class="te-btn">
+              <svg xmlns="http://www.w3.org/2000/svg" class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="18" height="18" rx="1"/><line x1="3" y1="9" x2="21" y2="9"/><line x1="3" y1="15" x2="21" y2="15"/><line x1="9" y1="3" x2="9" y2="21"/><line x1="15" y1="3" x2="15" y2="21"/></svg>
+            </button>
+            <button type="button" data-cmd="pageBreak" title="Insert page break (Ctrl+Enter)" class="te-btn" style="font-size:11px;gap:3px;padding:4px 7px">
+              <svg xmlns="http://www.w3.org/2000/svg" class="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="3" y1="12" x2="21" y2="12" stroke-dasharray="4 2"/></svg>
+              Break
             </button>
 
             <span style="flex:1"></span>
@@ -807,6 +1103,47 @@ class TextEditorInstance {
         /* Images */
         .te-page img { max-width: 100%; height: auto; display: block; margin: 8px 0; cursor: default; }
 
+        /* Horizontal rule */
+        .te-page .ProseMirror hr { border:none; border-top:2px solid #d1d5db; margin:12px 0; }
+
+        /* Page break visual divider */
+        .te-page .ProseMirror div[data-page-break] {
+          display:block; position:relative; width:100%; height:20px;
+          margin:8px 0; pointer-events:none; user-select:none;
+        }
+        .te-page .ProseMirror div[data-page-break]::before {
+          content:''; display:block; border-top:2px dashed #9ca3af; width:100%; margin-top:10px;
+        }
+        .te-page .ProseMirror div[data-page-break]::after {
+          content:'Page Break'; position:absolute; left:50%; top:2px;
+          transform:translateX(-50%); background:white; padding:0 8px;
+          font-size:10px; color:#9ca3af; font-family:Arial,sans-serif;
+          text-transform:uppercase; letter-spacing:.05em; white-space:nowrap;
+        }
+        .te-page .ProseMirror div[data-page-break].ProseMirror-selectednode {
+          outline:2px solid #6366f1; outline-offset:2px; border-radius:2px;
+        }
+
+        /* Resizable image wrapper */
+        .te-img-wrapper { position:relative; display:inline-block; max-width:100%; vertical-align:middle; }
+        .te-resize-handle {
+          position:absolute; width:8px; height:8px; background:white;
+          border:1.5px solid #6366f1; border-radius:50%; z-index:10; display:none; box-sizing:border-box;
+        }
+        .te-img-context-toolbar {
+          display:none; position:absolute; top:-34px; left:0; z-index:100;
+          background:white; border:1px solid #e5e7eb; border-radius:6px;
+          padding:2px 4px; box-shadow:0 2px 8px rgba(0,0,0,.12);
+          gap:2px; white-space:nowrap; align-items:center;
+        }
+        .te-img-context-toolbar.visible { display:flex; }
+        .te-img-context-toolbar .te-btn { min-height:22px; }
+
+        /* Color swatches on toolbar */
+        .te-color-swatch, .te-highlight-swatch {
+          display:block; width:16px; height:3px; border-radius:1px;
+        }
+
         /* Inline comment highlight */
         .te-comment-highlight {
           background: #fef08a; border-bottom: 2px solid #eab308;
@@ -921,6 +1258,15 @@ class TextEditorInstance {
           case 'undo':         c.undo().run(); break
           case 'redo':         c.redo().run(); break
           case 'image':        this.imageInput?.click(); break
+          case 'subscript':      c.toggleSubscript().run(); break
+          case 'superscript':    c.toggleSuperscript().run(); break
+          case 'horizontalRule': c.setHorizontalRule().run(); break
+          case 'pageBreak':      c.setPageBreak().run(); break
+          case 'unsetColor':     c.unsetColor().run(); break
+          case 'unsetHighlight': c.unsetHighlight().run(); break
+          case 'h1': c.toggleHeading({ level: 1 }).run(); break
+          case 'h2': c.toggleHeading({ level: 2 }).run(); break
+          case 'h3': c.toggleHeading({ level: 3 }).run(); break
           case 'table':        this.toggleTablePicker(btn); break
           case 'pageSetup':    this.togglePageSetup(btn); break
           case 'sourceToggle': this.toggleSourceView(); break
@@ -958,6 +1304,30 @@ class TextEditorInstance {
     this.imageInput?.addEventListener('change', e => {
       const file = e.target.files[0]
       if (file) this.uploadImage(file)
+      e.target.value = ''
+    })
+
+    // Text color picker
+    const colorInput = toolbarWrap.querySelector('.te-text-color-input')
+    const colorSwatch = toolbarWrap.querySelector('.te-color-swatch')
+    colorInput?.addEventListener('input', e => {
+      this.editor.chain().focus().setColor(e.target.value).run()
+      if (colorSwatch) colorSwatch.style.background = e.target.value
+    })
+    toolbarWrap.querySelector('.te-color-btn')?.addEventListener('click', () => colorInput?.click())
+
+    // Highlight color picker
+    const hlInput = toolbarWrap.querySelector('.te-highlight-color-input')
+    const hlSwatch = toolbarWrap.querySelector('.te-highlight-swatch')
+    hlInput?.addEventListener('input', e => {
+      this.editor.chain().focus().setHighlight({ color: e.target.value }).run()
+      if (hlSwatch) hlSwatch.style.background = e.target.value
+    })
+    toolbarWrap.querySelector('.te-highlight-btn')?.addEventListener('click', () => hlInput?.click())
+
+    // Line spacing select
+    toolbarWrap.querySelector('.te-line-spacing')?.addEventListener('change', e => {
+      if (e.target.value) this.editor.chain().focus().setLineSpacing(e.target.value).run()
       e.target.value = ''
     })
 
@@ -1054,6 +1424,8 @@ class TextEditorInstance {
       italic:      e.isActive('italic'),
       underline:   e.isActive('underline'),
       strike:      e.isActive('strike'),
+      subscript:   e.isActive('subscript'),
+      superscript: e.isActive('superscript'),
       h1:          e.isActive('heading', { level: 1 }),
       h2:          e.isActive('heading', { level: 2 }),
       h3:          e.isActive('heading', { level: 3 }),
@@ -1077,6 +1449,13 @@ class TextEditorInstance {
     if (this.fontSizeSelect) {
       this.fontSizeSelect.value = e.getAttributes('textStyle').fontSize || ''
     }
+
+    // Sync text color swatch
+    const currentColor = e.getAttributes('textStyle').color
+    const colorSwatch = toolbarWrap.querySelector('.te-color-swatch')
+    const colorInput  = toolbarWrap.querySelector('.te-text-color-input')
+    if (colorSwatch) colorSwatch.style.background = currentColor || '#000000'
+    if (colorInput)  colorInput.value = currentColor || '#000000'
 
     // Show/hide table context bar
     this.tableContextBar?.classList.toggle('hidden', !e.isActive('table'))
@@ -1248,7 +1627,32 @@ class TextEditorInstance {
     if (!page) return
     const m = this.margins
     page.style.padding = `${m.top}px ${m.right}px ${m.bottom}px ${m.left}px`
+    this.applyPageLines()
     requestAnimationFrame(() => this.updateLineNumbers())
+  }
+
+  applyPageLines() {
+    const page = this.container.querySelector('.te-page')
+    if (!page) return
+
+    if (this.pageSize === 'auto') {
+      page.style.backgroundImage = ''
+      return
+    }
+
+    const sizes = { a4: 1123, letter: 1056, legal: 1344 }
+    const pageH = sizes[this.pageSize] || sizes.a4
+
+    // Draw a subtle horizontal rule at every page-height interval
+    // The line sits 2px before the interval boundary and is 2px tall
+    page.style.backgroundImage = `repeating-linear-gradient(
+      to bottom,
+      transparent 0px,
+      transparent calc(${pageH}px - 2px),
+      #9ca3af calc(${pageH}px - 2px),
+      #9ca3af ${pageH}px,
+      transparent ${pageH}px
+    )`
   }
 
   applyPageSize() {
@@ -1290,6 +1694,7 @@ class TextEditorInstance {
       outerWrap.style.minHeight = (s.height + 64) + 'px'
     }
 
+    this.applyPageLines()
     requestAnimationFrame(() => this.updateLineNumbers())
   }
 
@@ -1325,6 +1730,14 @@ class TextEditorInstance {
   }
 
   async uploadImage(file) {
+    if (this.recordId === 'new') {
+      const reader = new FileReader()
+      reader.onload = (e) => {
+        this.editor.chain().focus().setImage({ src: e.target.result }).run()
+      }
+      reader.readAsDataURL(file)
+      return
+    }
     const fd = new FormData()
     fd.append('image', file)
     try {
@@ -1641,15 +2054,20 @@ class TextEditorInstance {
     // imageCache: src → { buf: ArrayBuffer, width: number, height: number } | null
     const imageCache = {}
 
-    const makeImageRun = (src) => {
+    const makeImageRun = (src, nodeAttrs) => {
       const cached = imageCache[src]
       if (!cached?.buf) {
         console.warn('[DOCX] no image data for:', src)
         return new TextRun('[Image]')
       }
-      const scale = cached.width > MAX_IMG_PX ? MAX_IMG_PX / cached.width : 1
-      const w = Math.max(1, Math.round((cached.width || 400) * scale))
-      const h = Math.max(1, Math.round((cached.height || 300) * scale))
+      // Use user-resized dimensions if stored, otherwise fall back to natural dimensions
+      const storedW = nodeAttrs?.width  ? parseInt(nodeAttrs.width)  : null
+      const storedH = nodeAttrs?.height ? parseInt(nodeAttrs.height) : null
+      const rawW = storedW || cached.width || 400
+      const rawH = storedH || cached.height || 300
+      const scale = rawW > MAX_IMG_PX ? MAX_IMG_PX / rawW : 1
+      const w = Math.max(1, Math.round(rawW * scale))
+      const h = Math.max(1, Math.round(rawH * scale))
       return new ImageRun({ type: 'png', data: cached.buf, transformation: { width: w, height: h } })
     }
 
@@ -1720,17 +2138,26 @@ class TextEditorInstance {
 
     // Build a TextRun from a TipTap text node, preserving font size, family, and style marks
     const makeTextRun = (n) => {
-      const markTypes = n.marks?.map(m => m.type) || []
+      const markTypes  = n.marks?.map(m => m.type) || []
       const styleAttrs = n.marks?.find(m => m.type === 'textStyle')?.attrs || {}
-      const ptSize = parseFloat(styleAttrs.fontSize)  // stored as plain number (pt) by FontSize extension
+      const hlAttrs    = n.marks?.find(m => m.type === 'highlight')?.attrs || {}
+      const ptSize     = parseFloat(styleAttrs.fontSize)
+      const colorHex   = styleAttrs.color ? styleAttrs.color.replace('#', '').toUpperCase() : undefined
+      const shading    = hlAttrs.color
+        ? { type: ShadingType.CLEAR, color: 'auto', fill: hlAttrs.color.replace('#', '').toUpperCase() }
+        : undefined
       return new TextRun({
-        text:      n.text || '',
-        bold:      markTypes.includes('bold'),
-        italics:   markTypes.includes('italic'),
-        underline: markTypes.includes('underline') ? {} : undefined,
-        strike:    markTypes.includes('strike'),
-        size:      ptSize > 0 ? ptSize * 2 : 24,  // half-points; default 12pt = 24
-        font:      styleAttrs.fontFamily || undefined,
+        text:       n.text || '',
+        bold:       markTypes.includes('bold'),
+        italics:    markTypes.includes('italic'),
+        underline:  markTypes.includes('underline') ? {} : undefined,
+        strike:     markTypes.includes('strike'),
+        subScript:  markTypes.includes('subscript'),
+        superScript: markTypes.includes('superscript'),
+        size:       ptSize > 0 ? ptSize * 2 : 24,
+        font:       styleAttrs.fontFamily || undefined,
+        color:      colorHex,
+        shading,
       })
     }
 
@@ -1738,14 +2165,16 @@ class TextEditorInstance {
 
     const processNode = (node) => {
       if (node.type === 'paragraph') {
-        // Inline images (TipTap Image.configure({ inline: true })) live inside paragraph nodes.
-        // docx requires ImageRun in its own Paragraph, so split on image children.
+        const spacing = node.attrs?.lineSpacing
+          ? { line: Math.round(parseFloat(node.attrs.lineSpacing) * 240) }
+          : undefined
+        // Inline images live inside paragraph nodes; docx requires ImageRun in its own Paragraph
         const segments = []
         let runs = []
         for (const n of (node.content || [])) {
           if (n.type === 'image') {
             if (runs.length) { segments.push({ type: 'text', runs }); runs = [] }
-            segments.push({ type: 'image', src: n.attrs?.src })
+            segments.push({ type: 'image', src: n.attrs?.src, attrs: n.attrs })
           } else if (n.type === 'text') {
             runs.push(makeTextRun(n))
           }
@@ -1753,21 +2182,27 @@ class TextEditorInstance {
         if (runs.length) segments.push({ type: 'text', runs })
 
         if (!segments.length) {
-          children.push(new Paragraph({ children: [] }))
+          children.push(new Paragraph({ children: [], spacing }))
         } else {
           for (const seg of segments) {
             if (seg.type === 'text') {
-              children.push(new Paragraph({ children: seg.runs }))
+              children.push(new Paragraph({ children: seg.runs, spacing }))
             } else {
-              children.push(new Paragraph({ children: [makeImageRun(seg.src)] }))
+              children.push(new Paragraph({ children: [makeImageRun(seg.src, seg.attrs)], spacing }))
             }
           }
         }
 
+      } else if (node.type === 'pageBreak') {
+        children.push(new Paragraph({ children: [new DocxPageBreak()] }))
+
       } else if (node.type === 'heading') {
         const levelMap = { 1: HeadingLevel.HEADING_1, 2: HeadingLevel.HEADING_2, 3: HeadingLevel.HEADING_3 }
+        const spacing = node.attrs?.lineSpacing
+          ? { line: Math.round(parseFloat(node.attrs.lineSpacing) * 240) }
+          : undefined
         const runs = (node.content || []).map(n => n.type === 'text' ? makeTextRun(n) : new TextRun(''))
-        children.push(new Paragraph({ heading: levelMap[node.attrs?.level] || HeadingLevel.HEADING_1, children: runs }))
+        children.push(new Paragraph({ heading: levelMap[node.attrs?.level] || HeadingLevel.HEADING_1, children: runs, spacing }))
 
       } else if (node.type === 'bulletList' || node.type === 'orderedList') {
         ;(node.content || []).forEach(item =>
@@ -1781,8 +2216,7 @@ class TextEditorInstance {
         ;(node.content || []).forEach(p => processNode(p))
 
       } else if (node.type === 'image') {
-        // Top-level block image (non-inline configuration)
-        children.push(new Paragraph({ children: [makeImageRun(node.attrs?.src)] }))
+        children.push(new Paragraph({ children: [makeImageRun(node.attrs?.src, node.attrs)] }))
 
       } else if (node.type === 'table') {
         const rows = (node.content || []).map(row =>

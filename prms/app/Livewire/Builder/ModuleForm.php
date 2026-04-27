@@ -42,6 +42,7 @@ class ModuleForm extends Component
                     ? ''
                     : implode("\n", $f->options_json);
                 $arr['show_in_index'] = $f->show_in_index ?? true;
+                $arr['col_span'] = $f->col_span ?? 1;
                 $arr['versioning'] = $f->versioning ?? false;
                 $arr['visibility_conditions'] = $f->visibility_conditions ?? ['field' => '', 'operator' => '=', 'value' => ''];
                 $arr['has_visibility'] = !empty($f->visibility_conditions['field']);
@@ -62,6 +63,7 @@ class ModuleForm extends Component
             'options_json' => [], 'options_raw' => '', 'description' => '',
             'sort_order' => count($this->fields),
             'show_in_index' => true,
+            'col_span' => 1,
             'versioning' => false,
             'visibility_conditions' => ['field' => '', 'operator' => '=', 'value' => ''],
             'has_visibility' => false,
@@ -183,6 +185,7 @@ class ModuleForm extends Component
                 'description'            => $field['description'] ?? null,
                 'sort_order'             => $i,
                 'show_in_index'          => $field['show_in_index'] ?? true,
+                'col_span'               => in_array($field['col_span'] ?? 1, [1, 2]) ? ($field['col_span'] ?? 1) : 1,
                 'versioning'             => ($field['type'] === 'attachment') ? ($field['versioning'] ?? false) : false,
                 'visibility_conditions'  => $visibilityConditions,
             ]);

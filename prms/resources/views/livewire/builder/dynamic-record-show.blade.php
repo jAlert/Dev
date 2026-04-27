@@ -129,10 +129,13 @@
 
         {{-- Field Values --}}
         <div class="bg-white overflow-hidden shadow-sm sm:rounded-lg p-6 mb-6">
-            <div class="space-y-5">
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-x-4 gap-y-5">
                 @foreach($module->fields as $field)
-                    @php $val = $record->data[$field->slug] ?? null; @endphp
-                    <div>
+                    @php
+                        $val = $record->data[$field->slug] ?? null;
+                        $colSpanClass = ($field->col_span ?? 1) == 2 ? 'md:col-span-2' : '';
+                    @endphp
+                    <div class="{{ $colSpanClass }}">
                         <dt class="text-xs font-semibold text-gray-500 uppercase tracking-wide">{{ $field->name }}</dt>
                         <dd class="mt-1 text-sm text-gray-900">
                             @if($field->type === 'boolean')
@@ -424,11 +427,11 @@
         </div>
         @endif
 
-        {{-- Comments --}}
+        {{-- Remarks --}}
         <div class="bg-white overflow-hidden shadow-sm sm:rounded-lg p-6">
             <h3 class="text-lg font-bold text-gray-800 border-b pb-2 mb-4 flex items-center gap-2">
                 <svg class="w-5 h-5 text-indigo-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 8h10M7 12h4m1 8l-4-4H5a2 2 0 01-2-2V6a2 2 0 012-2h14a2 2 0 012 2v8a2 2 0 01-2 2h-3l-4 4z"></path></svg>
-                Comments ({{ $comments->count() }})
+                Remarks ({{ $comments->count() }})
             </h3>
             <div class="space-y-4 max-h-96 overflow-y-auto mb-4">
                 @forelse($comments as $comment)
@@ -443,8 +446,8 @@
                                     <span class="text-xs text-gray-400">{{ $comment->created_at->diffForHumans() }}</span>
                                     @if($canDeleteComments)
                                         <button wire:click="deleteComment({{ $comment->id }})"
-                                            wire:confirm="Delete this comment?"
-                                            aria-label="Delete comment"
+                                            wire:confirm="Delete this remarks?"
+                                            aria-label="Delete remarks"
                                             class="text-red-400 hover:text-red-600 transition">
                                             <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"></path></svg>
                                         </button>
@@ -455,48 +458,18 @@
                         </div>
                     </div>
                 @empty
-                    <p class="text-sm text-gray-400 italic text-center py-4">No comments yet.</p>
+                    <p class="text-sm text-gray-400 italic text-center py-4">No remarks yet.</p>
                 @endforelse
             </div>
             <form wire:submit="addComment" class="border-t pt-4">
-                <textarea wire:model="newComment" rows="2" class="block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 text-sm" placeholder="Add a comment..."></textarea>
+                <textarea wire:model="newComment" rows="2" class="block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 text-sm" placeholder="Add a remarks..."></textarea>
                 @error('newComment') <span class="text-red-500 text-xs">{{ $message }}</span> @enderror
                 <div class="mt-2 flex justify-end">
-                    <button type="submit" class="bg-indigo-600 text-white px-4 py-1.5 rounded shadow-sm hover:bg-indigo-700 font-bold text-sm">Post Comment</button>
+                    <button type="submit" class="bg-indigo-600 text-white px-4 py-1.5 rounded shadow-sm hover:bg-indigo-700 font-bold text-sm">Post Remarks</button>
                 </div>
             </form>
         </div>
 
-        {{-- Activity History --}}
-        @if($canDeleteComments && $histories->isNotEmpty())
-        <div class="bg-white overflow-hidden shadow-sm sm:rounded-lg p-6">
-            <h3 class="text-base font-bold text-gray-800 border-b pb-2 mb-4 flex items-center gap-2">
-                <svg class="w-4 h-4 text-gray-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
-                Activity History
-            </h3>
-            <ol class="relative border-l border-gray-200 space-y-4 ml-3">
-                @foreach($histories as $h)
-                <li class="ml-4">
-                    <div class="absolute w-2.5 h-2.5 bg-indigo-400 rounded-full mt-1.5 -left-1.5 border border-white"></div>
-                    <div class="flex items-center gap-2">
-                        <span class="text-xs font-bold uppercase
-                            {{ $h->action === 'created' ? 'text-green-600' : '' }}
-                            {{ $h->action === 'updated' ? 'text-blue-600' : '' }}
-                            {{ $h->action === 'approved' ? 'text-green-700' : '' }}
-                            {{ $h->action === 'returned' ? 'text-orange-500' : '' }}
-                            {{ $h->action === 'submitted' ? 'text-indigo-600' : '' }}
-                        ">{{ ucfirst($h->action) }}</span>
-                        <span class="text-sm text-gray-600">by <strong>{{ $h->user?->name ?? 'System' }}</strong></span>
-                        <span class="text-xs text-gray-400 ml-auto">{{ $h->created_at->diffForHumans() }}</span>
-                    </div>
-                    @if(!empty($h->changes_json['comment']))
-                        <p class="text-xs text-gray-500 mt-1 italic">"{{ $h->changes_json['comment'] }}"</p>
-                    @endif
-                </li>
-                @endforeach
-            </ol>
-        </div>
-        @endif
 
     </div>{{-- end right column --}}
 

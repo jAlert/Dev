@@ -117,15 +117,16 @@
 
         <div class="bg-white overflow-hidden shadow-sm sm:rounded-lg p-6">
             <form wire:submit="save">
-                <div class="space-y-6">
-                    
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-x-4 gap-y-6">
+
 
                     @foreach($module->fields as $field)
                         @php
                             $vc = $field->visibility_conditions;
                             $hasVc = !empty($vc['field']);
+                            $colSpanClass = ($field->col_span ?? 1) == 2 ? 'md:col-span-2' : '';
                         @endphp
-                        <div @if($hasVc)
+                        <div class="{{ $colSpanClass }}" @if($hasVc)
                             x-data
                             x-show="(function(){
                                 var f='{{ $vc['field'] ?? '' }}';

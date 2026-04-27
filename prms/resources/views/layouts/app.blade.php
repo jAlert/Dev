@@ -164,7 +164,7 @@
                     <span class="sm:inline truncate">DENR-BMB Policy Review and Monitoring System (PRMS)</span>
                     <span class="sm:hidden">PRMS</span>
                     <span
-                        class="inline-flex ms-3 px-2 py-1 ring-1 ring-inset ring-blue-200 text-blue-400 text-xs font-medium rounded bg-blue-800">alpha</span>
+                        class="inline-flex ms-3 px-2 py-1 ring-1 ring-inset ring-blue-200 text-white text-xs font-medium rounded bg-blue-800">alpha</span>
                 </h1>
 
             </div>

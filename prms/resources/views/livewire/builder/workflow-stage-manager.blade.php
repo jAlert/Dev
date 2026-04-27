@@ -205,18 +205,87 @@
             </div>
         </div>
 
+        {{-- Stage Templates --}}
+        <div class="bg-white shadow-sm sm:rounded-lg">
+            <div class="p-6">
+                <div class="flex items-center justify-between mb-4">
+                    <h3 class="text-base font-bold">Stage Templates</h3>
+                    @if($stages->isNotEmpty() && !$savingTemplate)
+                        <button wire:click="openSaveTemplate"
+                            class="inline-flex items-center gap-1.5 text-xs font-bold px-3 py-1.5 rounded bg-indigo-600 text-white hover:bg-indigo-700">
+                            <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7H5a2 2 0 00-2 2v9a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-3m-1 4l-3 3m0 0l-3-3m3 3V4"/></svg>
+                            Save Current as Template
+                        </button>
+                    @endif
+                </div>
+
+                @if($savingTemplate)
+                    <div class="mb-4 p-4 bg-indigo-50 border border-indigo-200 rounded-lg flex items-end gap-3">
+                        <div class="flex-1">
+                            <label class="block text-sm font-medium text-gray-700 mb-1">Template Name</label>
+                            <input type="text" wire:model="newTemplateName" wire:keydown.enter="confirmSaveTemplate"
+                                class="block w-full rounded border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 text-sm"
+                                placeholder="e.g. Standard 3-Stage Approval">
+                            @error('newTemplateName') <span class="text-red-500 text-xs">{{ $message }}</span> @enderror
+                        </div>
+                        <button wire:click="confirmSaveTemplate"
+                            class="px-4 py-2 bg-indigo-600 text-white text-sm font-bold rounded hover:bg-indigo-700">Save</button>
+                        <button wire:click="cancelSaveTemplate"
+                            class="px-4 py-2 bg-gray-200 text-gray-700 text-sm rounded hover:bg-gray-300">Cancel</button>
+                    </div>
+                @endif
+
+                @if(session('message'))
+                    <div class="mb-4 px-4 py-2 bg-green-50 border border-green-200 text-green-700 rounded text-sm">{{ session('message') }}</div>
+                @endif
+
+                @if($templates->isEmpty())
+                    <p class="text-gray-400 italic text-sm">No saved templates yet. Configure stages below and click "Save Current as Template".</p>
+                @else
+                    <div class="overflow-x-auto">
+                        <table class="min-w-full text-sm">
+                            <thead>
+                                <tr class="bg-gray-50 border-b text-left text-xs font-semibold text-gray-500 uppercase tracking-wide">
+                                    <th class="px-4 py-2">Template Name</th>
+                                    <th class="px-4 py-2">Stages</th>
+                                    <th class="px-4 py-2">Date Created</th>
+                                    <th class="px-4 py-2 text-right">Actions</th>
+                                </tr>
+                            </thead>
+                            <tbody class="divide-y divide-gray-100">
+                                @foreach($templates as $tpl)
+                                <tr class="hover:bg-gray-50">
+                                    <td class="px-4 py-3 font-medium text-gray-900">{{ $tpl->name }}</td>
+                                    <td class="px-4 py-3 text-gray-500">{{ count($tpl->stages_json) }} stage{{ count($tpl->stages_json) !== 1 ? 's' : '' }}</td>
+                                    <td class="px-4 py-3 text-gray-400">{{ $tpl->created_at->format('M d, Y h:i A') }}</td>
+                                    <td class="px-4 py-3 text-right flex justify-end gap-2">
+                                        <button wire:click="useTemplate({{ $tpl->id }})"
+                                            wire:confirm="Apply '{{ addslashes($tpl->name) }}' to this module? Current stages will be replaced."
+                                            class="inline-flex items-center gap-1 px-3 py-1 rounded bg-green-600 text-white text-xs font-bold hover:bg-green-700">
+                                            <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/></svg>
+                                            Use
+                                        </button>
+                                        <button wire:click="deleteTemplate({{ $tpl->id }})"
+                                            wire:confirm="Delete template '{{ addslashes($tpl->name) }}'?"
+                                            class="inline-flex items-center gap-1 px-3 py-1 rounded bg-red-100 text-red-600 text-xs font-bold hover:bg-red-200">
+                                            <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"/></svg>
+                                            Delete
+                                        </button>
+                                    </td>
+                                </tr>
+                                @endforeach
+                            </tbody>
+                        </table>
+                    </div>
+                @endif
+            </div>
+        </div>
+
         {{-- Stages List --}}
         <div class="bg-white shadow-sm sm:rounded-lg">
             <div class="p-6">
                 <div class="flex items-center justify-between mb-4">
                     <h3 class="text-base font-bold">Configured Stages</h3>
-                    @if($stages->isNotEmpty())
-                    <button wire:click="saveTemplate" wire:loading.attr="disabled"
-                        class="inline-flex items-center gap-1.5 text-xs font-bold px-3 py-1.5 rounded bg-gray-100 text-gray-700 hover:bg-gray-200 disabled:opacity-50">
-                        <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"/></svg>
-                        Save Template
-                    </button>
-                    @endif
                 </div>
                 @if($stages->isEmpty())
                     <p class="text-gray-500 italic text-sm">No stages configured. Add the first stage above.</p>
