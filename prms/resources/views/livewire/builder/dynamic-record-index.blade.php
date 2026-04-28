@@ -4,9 +4,9 @@
             {{ $module->name }}
         </h2>
         <div class="flex gap-2">
-            <button wire:click="exportCsv" class="bg-white border border-gray-300 text-gray-700 px-3 py-2 rounded shadow-sm text-sm font-medium hover:bg-gray-50">
+            <a href="{{ route('dynamic.export-csv', $moduleSlug) }}" class="bg-white border border-gray-300 text-gray-700 px-3 py-2 rounded shadow-sm text-sm font-medium hover:bg-gray-50">
                 Export CSV
-            </button>
+            </a>
             @if(auth()->user()->can("create-{$moduleSlug}"))
                 <a href="{{ route('dynamic.create', $moduleSlug) }}" wire:navigate class="bg-indigo-600 text-white px-4 py-2 rounded shadow-sm text-sm font-bold hover:bg-indigo-700">Create New</a>
             @endif

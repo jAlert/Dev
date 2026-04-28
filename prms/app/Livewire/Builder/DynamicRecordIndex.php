@@ -110,37 +110,6 @@ class DynamicRecordIndex extends Component
         $record->update(['status' => $status]);
     }
 
-    public function exportCsv()
-    {
-        if (!auth()->user()->can("view-{$this->moduleSlug}")) abort(403);
-
-        $targetModuleId = $this->module->source_module_id ?? $this->module->id;
-        $records = $this->buildFilteredQuery($targetModuleId)->get();
-        $fields = $this->module->fields;
-        $filename = $this->module->slug . '-export-' . now()->format('Y-m-d') . '.csv';
-
-        return response()->streamDownload(function () use ($records, $fields) {
-            $handle = fopen('php://output', 'w');
-            $headers = $fields->pluck('name')->toArray();
-            array_push($headers, 'Status', 'Stage', 'Created By', 'Created At');
-            fputcsv($handle, $headers);
-
-            foreach ($records as $record) {
-                $row = [];
-                foreach ($fields as $field) {
-                    $value = $record->data[$field->slug] ?? '';
-                    if (is_array($value)) $value = implode(', ', $value);
-                    $row[] = $value;
-                }
-                $row[] = $record->status;
-                $row[] = $record->currentStage?->name ?? '';
-                $row[] = $record->creator?->name ?? '';
-                $row[] = $record->created_at->format('Y-m-d H:i');
-                fputcsv($handle, $row);
-            }
-            fclose($handle);
-        }, $filename, ['Content-Type' => 'text/csv']);
-    }
 
     private function buildFilteredQuery(int $moduleId): Builder
     {

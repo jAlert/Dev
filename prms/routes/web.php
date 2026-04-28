@@ -2,6 +2,7 @@
 
 use Illuminate\Support\Facades\Route;
 use App\Http\Controllers\Auth\SocialController;
+use App\Http\Controllers\DynamicRecordController;
 use App\Livewire\Builder\ModuleIndex;
 use App\Livewire\Builder\ModuleForm;
 use App\Livewire\Builder\Dashboard;
@@ -82,6 +83,7 @@ Route::middleware(['auth', 'verified'])->group(function () {
 
     Route::get('/app/{moduleSlug}', DynamicRecordIndex::class)->name('dynamic.index');
     Route::get('/app/{moduleSlug}/create', DynamicRecordForm::class)->name('dynamic.create');
+    Route::get('/app/{moduleSlug}/export-csv', [DynamicRecordController::class, 'exportCsv'])->name('dynamic.export-csv');
     Route::get('/app/{moduleSlug}/{record}', DynamicRecordShow::class)->name('dynamic.show');
     Route::get('/app/{moduleSlug}/{record}/edit', DynamicRecordForm::class)->name('dynamic.edit');
 });
