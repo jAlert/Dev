@@ -51,6 +51,9 @@ erDiagram
         string type
         boolean is_required
         int sort_order
+        boolean show_in_index
+        tinyint col_span
+        boolean versioning
         json options_json
         json visibility_conditions
         timestamps created_at
@@ -107,17 +110,26 @@ erDiagram
         string name
         smallint order
         bigint approver_role_id FK
+        bigint reviewer_role_id FK
         boolean requires_all_approvers
         boolean is_final_approval
         boolean has_return_button
         string stage_type
         smallint auto_advance_days
-        bigint branch_ad_referendum_stage_id FK
-        bigint branch_trc_stage_id FK
         json branches_json
         json stage_fields_json
+        json notify_on_enter_json
+        json date_reminders_json
         boolean allow_edit
         string default_status
+        timestamps created_at
+        timestamps updated_at
+    }
+
+    workflow_stage_templates {
+        bigint id PK
+        string name
+        json stages_json
         timestamps created_at
         timestamps updated_at
     }
@@ -161,6 +173,48 @@ erDiagram
         int response_code
         text response_body
         boolean success
+        timestamps created_at
+        timestamps updated_at
+    }
+
+    text_editor_documents {
+        bigint id PK
+        bigint record_id FK
+        string field_slug
+        longtext binary_state
+        timestamps created_at
+        timestamps updated_at
+    }
+
+    text_editor_histories {
+        bigint id PK
+        bigint record_id FK
+        string field_slug
+        bigint user_id FK
+        enum action
+        text content
+        timestamp created_at
+    }
+
+    text_editor_reviews {
+        bigint id PK
+        bigint record_id FK
+        string field_slug
+        bigint user_id FK
+        timestamp reviewed_at
+        timestamps created_at
+        timestamps updated_at
+    }
+
+    text_editor_comments {
+        bigint id PK
+        bigint record_id FK
+        string field_slug
+        uuid comment_id UK
+        bigint user_id FK
+        string quoted_text
+        text body
+        timestamp resolved_at
         timestamps created_at
         timestamps updated_at
     }
@@ -244,9 +298,8 @@ erDiagram
     records }o--|| workflow_stages : "at stage (current_stage_id)"
 
     %% Workflow / approval
-    workflow_stages }o--|| roles : "approved by role"
-    workflow_stages |o--o| workflow_stages : "branch ad-referendum (legacy FK)"
-    workflow_stages |o--o| workflow_stages : "branch trc (legacy FK)"
+    workflow_stages }o--|| roles : "approver role"
+    workflow_stages }o--o| roles : "reviewer role"
     record_approvals }o--|| workflow_stages : "for stage"
 
     %% Automation
@@ -255,9 +308,46 @@ erDiagram
     %% Webhooks
     webhooks ||--o{ webhook_logs : "logs"
 
+    %% Collaborative editor
+    records ||--o{ text_editor_documents : "has"
+    records ||--o{ text_editor_histories : "has"
+    records ||--o{ text_editor_reviews : "has"
+    records ||--o{ text_editor_comments : "has"
+    users ||--o{ text_editor_histories : "authors"
+    users ||--o{ text_editor_reviews : "marks"
+    users ||--o{ text_editor_comments : "writes"
+
     %% Permissions (Spatie)
     roles ||--o{ role_has_permissions : "has"
     permissions ||--o{ role_has_permissions : "granted via"
     roles ||--o{ model_has_roles : "assigned via"
     permissions ||--o{ model_has_permissions : "assigned via"
 ```
+
+## Column Notes
+
+### `module_fields`
+| Column | Notes |
+|---|---|
+| `show_in_index` | boolean — whether field appears in the record list table |
+| `col_span` | tinyint 1–2 — grid column width in form layout |
+| `versioning` | boolean — enables collaborative Tiptap editor for this field |
+
+### `workflow_stages`
+| Column | Notes |
+|---|---|
+| `approver_role_id` | role that can approve/forward/reject at this stage |
+| `reviewer_role_id` | separate role for text-editor reviewing ("Mark Review Done") |
+| `stage_type` | `approval` \| `review` \| `none` |
+| `branches_json` | `[{label, stage_id}, ...]` — custom routing buttons |
+| `stage_fields_json` | `[{name, slug, type, is_required, options_json}, ...]` — inline fields filled during review |
+| `notify_on_enter_json` | notifications fired automatically when record enters this stage |
+| `date_reminders_json` | scheduled reminders based on date fields in the record |
+
+### `text_editor_*` tables
+| Table | Purpose |
+|---|---|
+| `text_editor_documents` | Stores base64-encoded Yjs binary CRDT state per `(record_id, field_slug)` |
+| `text_editor_histories` | Per-change log: insert/delete events with user + content |
+| `text_editor_reviews` | Tracks "Review Done" marks per `(record_id, field_slug, user_id)` |
+| `text_editor_comments` | Inline comments keyed by `comment_id` UUID (matches Tiptap mark attribute) |

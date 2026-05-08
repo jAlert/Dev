@@ -41,12 +41,17 @@ flowchart TD
     REV_ADREF -->|"Resubmit → Stage 10\nTRC routes via\nForward Ad Ref ▶"| S10
 
     %% ── Stage 50 ──────────────────────────────────────────────────────────────
-    S50["🏢 Stage 50\nPTWG Endorsement\n── TRC Secretariat ──\n📎 Upload Minutes of Meeting"]
+    S50["🏢 Stage 50\nPTWG Endorsement\n── Office of the Director ──\n── (Receiving/Releasing) ──\n📎 Upload Endorsement Letter"]
 
-    S50 -->|"✅ Approve\n(no comments)"| S60
-    S50 -->|"🔀 Forward TRC\n(PTWG has comments\n→ back to deliberation)"| S30
+    S50 -->|"✅ Forward\n(endorsed)"| S55
     S50 -->|"↩ Return\n(revision needed)"| REV_PTWG[Proponent\nRevises Proposal]
     REV_PTWG -->|"Resubmit → Stage 10\nTRC routes via\nForward TRC ▶"| S10
+
+    %% ── Stage 55 ──────────────────────────────────────────────────────────────
+    S55["📬 Stage 55\nEndorsed — Waiting for PTWG\n── Office of the Director ──\n── (Receiving/Releasing) ──\n📎 Upload PTWG Return Document"]
+
+    S55 -->|"🔀 Proceed to Signing"| S60
+    S55 -->|"🔀 Forward TRC\n(PTWG has comments\n→ back to deliberation)"| S30
 
     %% ── Stage 60 ──────────────────────────────────────────────────────────────
     S60["✍ Stage 60\nFinal — Signing & Publication\n── TRC Secretariat ──\n📎 Upload Signed Policy\n🔚 is_final = true"]
@@ -62,7 +67,7 @@ flowchart TD
     classDef decision     fill:#5c3d00,color:#fff,stroke:#f4a261,stroke-width:2px
     classDef draft        fill:#3d3d3d,color:#fff,stroke:#aaa,stroke-width:1px,rx:6
 
-    class S10,S20,S30,S40,S50,S60 stage
+    class S10,S20,S30,S40,S50,S55,S60 stage
     class REV_DOCS,REV_REVIEW,REV_TRC,REV_ADREF,REV_PTWG action
     class COMPLETED,START terminal
     class TRC_ROUTE decision
@@ -75,12 +80,12 @@ flowchart TD
 
 | Path | Steps |
 |---|---|
-| **Happy path** | Submit → S10 Approve → S20 Approve → S30 Forward Ad Ref → S50 Approve → S60 Approve → ✅ Completed |
+| **Happy path** | Submit → S10 Approve → S20 Approve → S30 Forward Ad Ref → S50 Forward → S55 Proceed → S60 Approve → ✅ Completed |
 | **Incomplete docs** | S10 Return → Revise → Resubmit → S10 |
 | **Reviewer has comments** | S20 Return → Revise → S10 → Forward TRC → S30 |
 | **TRC needs revision (TRC loop)** | S30 Return → Revise → S10 → Forward TRC → S30 |
 | **TRC needs revision (Ad Ref)** | S30 Return → Revise → S10 → Forward Ad Ref → S40 → S50 |
-| **PTWG has comments** | S50 Forward TRC → S30 → (continues from S30) |
+| **PTWG has comments** | S55 Forward TRC → S30 → (continues from S30) |
 | **Auto-advance (S20 / S40)** | No reviewer action in 10 working days → advances to next stage |
 
 ## Roles
@@ -88,8 +93,9 @@ flowchart TD
 | Role | Stages |
 |---|---|
 | **Proponent** | Creates, submits, revises |
-| **TRC Secretariat** | S10, S30, S50, S60 — reviews, routes, deliberates, endorses |
+| **TRC Secretariat** | S10, S30, S60 — reviews, routes, deliberates, signs |
 | **Reviewer** | S20, S40 — provides comments, 10-day deadline |
+| **Office of the Director (Receiving/Releasing)** | S50, S55 — receives PTWG endorsement, releases to signing |
 
 
 
@@ -97,10 +103,11 @@ flowchart TD
 
 Step 1 — Create Roles /admin/roles
 
-  Create three roles in order:
+  Create four roles in order:
   1. Proponent
   2. TRC Secretariat
   3. Reviewer
+  4. Receiving/Releasing
 
   ---
   Step 2 — Create the Module /builder/modules/create
@@ -140,66 +147,78 @@ Step 1 — Create Roles /admin/roles
 
   Edit each role and tick the permissions:
 
-  ┌─────────────────┬────────────────────┐
-  │      Role       │    Permissions     │
-  ├─────────────────┼────────────────────┤
-  │ Proponent       │ view, create, edit │
-  ├─────────────────┼────────────────────┤
-  │ TRC Secretariat │ all 7              │
-  ├─────────────────┼────────────────────┤
-  │ Reviewer        │ view, review       │
-  └─────────────────┴────────────────────┘
+  ┌──────────────────────┬────────────────────┐
+  │         Role         │    Permissions     │
+  ├──────────────────────┼────────────────────┤
+  │ Proponent            │ view, create, edit │
+  ├──────────────────────┼────────────────────┤
+  │ TRC Secretariat      │ all 7              │
+  ├──────────────────────┼────────────────────┤
+  │ Reviewer             │ view, review       │
+  ├──────────────────────┼────────────────────┤
+  │ Receiving/Releasing  │ view, approve      │
+  └──────────────────────┴────────────────────┘
 
   ---
   Step 4 — Create Workflow Stages /builder/workflow-stages/policy_proposals
 
   Create all 6 stages. Branches must be set after all stages exist (the dropdowns populate from existing stages):
 
-  ┌───────┬───────────────────────────────┬─────────────────┬──────────┬──────────────┬────────────────┬────────────┐
-  │ Order │             Name              │      Role       │   Type   │ Auto-advance │ Default Status │ Allow Edit │
-  ├───────┼───────────────────────────────┼─────────────────┼──────────┼──────────────┼────────────────┼────────────┤
-  │ 10    │ Initial Document Review       │ TRC Secretariat │ Approval │ —            │ Submitted      │ No         │
-  ├───────┼───────────────────────────────┼─────────────────┼──────────┼──────────────┼────────────────┼────────────┤
-  │ 20    │ Reviewer Review               │ Reviewer        │ Review   │ 10 days      │ Under Review   │ No         │
-  ├───────┼───────────────────────────────┼─────────────────┼──────────┼──────────────┼────────────────┼────────────┤
-  │ 30    │ TRC Deliberation              │ TRC Secretariat │ Approval │ —            │ Under Review   │ No         │
-  ├───────┼───────────────────────────────┼─────────────────┼──────────┼──────────────┼────────────────┼────────────┤
-  │ 40    │ Ad Referendum Review          │ Reviewer        │ Review   │ 10 days      │ Under Review   │ No         │
-  ├───────┼───────────────────────────────┼─────────────────┼──────────┼──────────────┼────────────────┼────────────┤
-  │ 50    │ PTWG Endorsement              │ TRC Secretariat │ Approval │ —            │ Under Review   │ No         │
-  ├───────┼───────────────────────────────┼─────────────────┼──────────┼──────────────┼────────────────┼────────────┤
-  │ 60    │ Final - Signing & Publication │ TRC Secretariat │ Approval │ ✅ Final     │ Completed      │ No         │
-  └───────┴───────────────────────────────┴─────────────────┴──────────┴──────────────┴────────────────┴────────────┘
+  ┌───────┬───────────────────────────────┬──────────────────────┬──────────────────┬──────────┬──────────────┬────────────────┬────────────┐
+  │ Order │             Name              │    Approver Role     │  Reviewer Role   │   Type   │ Auto-advance │ Default Status │ Allow Edit │
+  ├───────┼───────────────────────────────┼──────────────────────┼──────────────────┼──────────┼──────────────┼────────────────┼────────────┤
+  │ 10    │ Initial Document Review       │ TRC Secretariat      │ —                │ Approval │ —            │ Submitted      │ No         │
+  ├───────┼───────────────────────────────┼──────────────────────┼──────────────────┼──────────┼──────────────┼────────────────┼────────────┤
+  │ 20    │ Reviewer Review               │ Reviewer             │ Reviewer         │ Review   │ 10 days      │ Under Review   │ No         │
+  ├───────┼───────────────────────────────┼──────────────────────┼──────────────────┼──────────┼──────────────┼────────────────┼────────────┤
+  │ 30    │ TRC Deliberation              │ TRC Secretariat      │ —                │ Approval │ —            │ Under Review   │ No         │
+  ├───────┼───────────────────────────────┼──────────────────────┼──────────────────┼──────────┼──────────────┼────────────────┼────────────┤
+  │ 40    │ Ad Referendum Review          │ Reviewer             │ Reviewer         │ Review   │ 10 days      │ Under Review   │ No         │
+  ├───────┼───────────────────────────────┼──────────────────────┼──────────────────┼──────────┼──────────────┼────────────────┼────────────┤
+  │ 50    │ PTWG Endorsement              │ Receiving/Releasing  │ —                │ Review   │ —            │ Under Review   │ No         │
+  ├───────┼───────────────────────────────┼──────────────────────┼──────────────────┼──────────┼──────────────┼────────────────┼────────────┤
+  │ 55    │ Endorsed (Waiting for PTWG)   │ Receiving/Releasing  │ —                │ None     │ —            │ Under Review   │ No         │
+  ├───────┼───────────────────────────────┼──────────────────────┼──────────────────┼──────────┼──────────────┼────────────────┼────────────┤
+  │ 60    │ Final - Signing & Publication │ TRC Secretariat      │ —                │ Approval │ ✅ Final     │ Completed      │ No         │
+  └───────┴───────────────────────────────┴──────────────────────┴──────────────────┴──────────┴──────────────┴────────────────┴────────────┘
 
-  Notes on new stage options:
-  - **Default Status**: the status automatically applied to the record when it enters this stage. The final stage always sets Completed regardless.
+  Notes on stage options:
+  - **Default Status**: status automatically applied when record enters the stage. Final stage always sets Completed regardless.
   - **Allow Edit**: when disabled, the Edit button is hidden for records at this stage (even for users with edit permission). Useful for read-only review stages.
+  - **Notify on Enter**: configure notifications fired automatically when a record enters the stage (e.g. email the proponent that their document is under review).
+  - **Date Reminders**: schedule reminders tied to date fields in the record (e.g. remind 3 days before a deadline field).
 
   Then edit each stage to set branches:
 
-  ┌─────────────────────────┬─────────────────────────┬───────────────────┐
-  │          Stage          │ Forward Ad Referendum → │ Forward for TRC → │
-  ├─────────────────────────┼─────────────────────────┼───────────────────┤
-  │ Initial Document Review │ Ad Referendum Review    │ TRC Deliberation  │
-  ├─────────────────────────┼─────────────────────────┼───────────────────┤
-  │ TRC Deliberation        │ PTWG Endorsement        │ —                 │
-  ├─────────────────────────┼─────────────────────────┼───────────────────┤
-  │ PTWG Endorsement        │ —                       │ TRC Deliberation  │
-  └─────────────────────────┴─────────────────────────┴───────────────────┘
+  ┌──────────────────────────────┬──────────────────────────────┬───────────────────────────┐
+  │            Stage             │       Branch Button(s)       │         Routes to         │
+  ├──────────────────────────────┼──────────────────────────────┼───────────────────────────┤
+  │ Initial Document Review      │ Forward Ad Referendum →      │ Ad Referendum Review      │
+  │                              │ Forward for TRC →            │ TRC Deliberation          │
+  ├──────────────────────────────┼──────────────────────────────┼───────────────────────────┤
+  │ TRC Deliberation             │ For PTWG Endorsement →       │ PTWG Endorsement          │
+  │                              │ Forward to Proponent (Ad Ref)│ Revise Draft Policy (S42) │
+  │                              │ Forward to Proponent (Re-Del)│ Revise Draft Policy (S25) │
+  ├──────────────────────────────┼──────────────────────────────┼───────────────────────────┤
+  │ Endorsed (Waiting for PTWG)  │ Proceed to Signing →         │ Final — Signing           │
+  │                              │ Forward TRC →                │ TRC Deliberation          │
+  └──────────────────────────────┴──────────────────────────────┴───────────────────────────┘
 
   ---
   Step 5 — Create Users /admin/users
 
   Create three demo users and assign roles:
 
-  ┌──────────────────┬────────────────────────┬─────────────────┐
-  │       Name       │         Email          │      Role       │
-  ├──────────────────┼────────────────────────┼─────────────────┤
-  │ Proponent User   │ proponent@prms.local   │ Proponent       │
-  ├──────────────────┼────────────────────────┼─────────────────┤
-  │ Secretariat User │ secretariat@prms.local │ TRC Secretariat │
-  ├──────────────────┼────────────────────────┼─────────────────┤
-  │ Reviewer User    │ reviewer@prms.local    │ Reviewer        │
-  └──────────────────┴────────────────────────┴─────────────────┘
+  ┌──────────────────────┬──────────────────────────┬──────────────────────┐
+  │         Name         │          Email           │         Role         │
+  ├──────────────────────┼──────────────────────────┼──────────────────────┤
+  │ Proponent User       │ proponent@prms.local     │ Proponent            │
+  ├──────────────────────┼──────────────────────────┼──────────────────────┤
+  │ Secretariat User     │ secretariat@prms.local   │ TRC Secretariat      │
+  ├──────────────────────┼──────────────────────────┼──────────────────────┤
+  │ Reviewer User        │ reviewer@prms.local      │ Reviewer             │
+  ├──────────────────────┼──────────────────────────┼──────────────────────┤
+  │ Director Office User │ director@prms.local      │ Receiving/Releasing  │
+  └──────────────────────┴──────────────────────────┴──────────────────────┘
 
 

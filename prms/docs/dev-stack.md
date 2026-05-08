@@ -5,13 +5,30 @@
 | Backend Framework     | Laravel (PHP 8.4)                                                |
 | Interactive UI        | Livewire 3 + Volt                                                |
 | CSS                   | Tailwind CSS 3                                                   |
-| Build Tool            | Vite                                                             |
+| Build Tool            | Vite 8                                                           |
 | Auth                  | Laravel Sanctum (API) + Google OAuth (Socialite) + TOTP 2FA      |
 | Permissions           | Spatie Laravel Permission 7.2                                    |
-| Database              | MySQL                                                            |
+| Database              | MySQL 8.4                                                        |
 | Queue                 | Database-backed                                                  |
+| Collaborative Editing | Tiptap + Hocuspocus (Node.js WS) + Yjs CRDT                     |
 | Testing               | Pest PHP                                                         |
+| Deployment            | Docker (php:8.4-fpm, nginx, mysql:8.4, node:22-alpine)           |
 | Theming               | CSS Custom Properties (6 built-in color themes, user-selectable) |
+
+## Docker Services
+
+| Service | Image | Purpose |
+|---|---|---|
+| `app` | `php:8.4-fpm` | Laravel PHP-FPM |
+| `nginx` | nginx | Web server (port 8080) |
+| `mysql` | `mysql:8.4` | Database (host port 3307) |
+| `queue` | app image | `queue:work` |
+| `scheduler` | app image | `schedule:run` in loop |
+| `hocuspocus` | `node:22-alpine` | Yjs WebSocket server for collaborative editing |
+
+Named volumes: `prms_build` (compiled CSS), `prms_vendor`, `prms_node_modules`, `prms_mysql_data`.
+
+> After `docker compose build`, always run `docker compose exec app npm run build` to push new CSS into the live `prms_build` volume.
 
 ## Color Themes
 
