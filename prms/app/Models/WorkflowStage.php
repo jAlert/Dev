@@ -12,7 +12,7 @@ class WorkflowStage extends Model
         'requires_all_approvers', 'is_final_approval', 'has_return_button', 'allow_edit', 'default_status', 'stage_type',
         'auto_advance_days',
         'branch_ad_referendum_stage_id', 'branch_trc_stage_id',
-        'branches_json', 'stage_fields_json', 'notify_on_enter_json',
+        'branches_json', 'stage_fields_json', 'notify_on_enter_json', 'date_reminders_json',
     ];
 
     protected $casts = [
@@ -24,6 +24,7 @@ class WorkflowStage extends Model
         'branches_json'        => 'array',
         'stage_fields_json'    => 'array',
         'notify_on_enter_json' => 'array',
+        'date_reminders_json'  => 'array',
     ];
 
     public function module()

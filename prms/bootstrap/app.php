@@ -1,6 +1,7 @@
 <?php
 
 use App\Console\Commands\AdvanceDeadlineStages;
+use App\Console\Commands\SendDateFieldReminders;
 use Illuminate\Foundation\Application;
 use Illuminate\Foundation\Configuration\Exceptions;
 use Illuminate\Foundation\Configuration\Middleware;
@@ -15,6 +16,7 @@ return Application::configure(basePath: dirname(__DIR__))
     )
     ->withSchedule(function (Schedule $schedule): void {
         $schedule->command(AdvanceDeadlineStages::class)->dailyAt('08:00');
+        $schedule->command(SendDateFieldReminders::class)->dailyAt('07:00');
     })
     ->withMiddleware(function (Middleware $middleware): void {
         $middleware->alias([

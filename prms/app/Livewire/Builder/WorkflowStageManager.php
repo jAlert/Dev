@@ -38,6 +38,7 @@ class WorkflowStageManager extends Component
     public $autoAdvanceDays = null;
     public $branches = [];
     public $notifyRecipients = [];
+    public array $dateReminders = [];
 
     public function mount(Module $module)
     {
@@ -72,6 +73,7 @@ class WorkflowStageManager extends Component
         $this->autoAdvanceDays = null;
         $this->branches = [];
         $this->notifyRecipients = [];
+        $this->dateReminders = [];
     }
 
     public function edit($id): void
@@ -105,6 +107,16 @@ class WorkflowStageManager extends Component
             fn($r) => ['type' => $r['type'] ?? 'submitter', 'value' => (string) ($r['value'] ?? '')],
             $stage->notify_on_enter_json ?? []
         );
+        $this->dateReminders = array_map(function ($dr) {
+            return [
+                'field_slug'  => $dr['field_slug'] ?? '',
+                'days_before' => (string) ($dr['days_before'] ?? 1),
+                'recipients'  => array_map(
+                    fn($r) => ['type' => $r['type'] ?? 'submitter', 'value' => (string) ($r['value'] ?? '')],
+                    $dr['recipients'] ?? []
+                ),
+            ];
+        }, $stage->date_reminders_json ?? []);
     }
 
     public function addBranch(): void
@@ -125,6 +137,26 @@ class WorkflowStageManager extends Component
     public function removeNotifyRecipient($index): void
     {
         array_splice($this->notifyRecipients, $index, 1);
+    }
+
+    public function addDateReminder(): void
+    {
+        $this->dateReminders[] = ['field_slug' => '', 'days_before' => '1', 'recipients' => [['type' => 'submitter', 'value' => '']]];
+    }
+
+    public function removeDateReminder($index): void
+    {
+        array_splice($this->dateReminders, $index, 1);
+    }
+
+    public function addDateReminderRecipient($index): void
+    {
+        $this->dateReminders[$index]['recipients'][] = ['type' => 'submitter', 'value' => ''];
+    }
+
+    public function removeDateReminderRecipient($reminderIndex, $recipientIndex): void
+    {
+        array_splice($this->dateReminders[$reminderIndex]['recipients'], $recipientIndex, 1);
     }
 
     public function addStageField(): void
@@ -178,6 +210,7 @@ class WorkflowStageManager extends Component
                 'auto_advance_days'    => $this->autoAdvanceDays ?: null,
                 'branches_json'        => empty($branches) ? null : $branches,
                 'notify_on_enter_json' => $this->buildNotifyRecipients(),
+                'date_reminders_json'  => $this->buildDateReminders(),
             ]
         );
 
@@ -227,6 +260,7 @@ class WorkflowStageManager extends Component
                 'stage_fields_json'    => $s->stage_fields_json,
                 'branches_json'        => $s->branches_json,
                 'notify_on_enter_json' => $s->notify_on_enter_json,
+                'date_reminders_json'  => $s->date_reminders_json,
             ])->values()->all();
 
         WorkflowStageTemplate::create([
@@ -275,6 +309,7 @@ class WorkflowStageManager extends Component
                 'stage_fields_json'    => $s['stage_fields_json'] ?? null,
                 'branches_json'        => null, // branches reference stage IDs; can't port across modules
                 'notify_on_enter_json' => $s['notify_on_enter_json'] ?? null,
+                'date_reminders_json'  => $s['date_reminders_json'] ?? null,
             ]);
         }
 
@@ -300,6 +335,33 @@ class WorkflowStageManager extends Component
             $recipients[] = ['type' => $type, 'value' => $value];
         }
         return empty($recipients) ? null : $recipients;
+    }
+
+    private function buildDateReminders(): ?array
+    {
+        $reminders = [];
+        foreach ($this->dateReminders as $dr) {
+            $slug = trim($dr['field_slug'] ?? '');
+            $days = max(1, (int) ($dr['days_before'] ?? 1));
+            if (!$slug) continue;
+
+            $recipients = [];
+            foreach ($dr['recipients'] ?? [] as $r) {
+                $type = $r['type'] ?? '';
+                if (!$type) continue;
+                if ($type === 'submitter') {
+                    $recipients[] = ['type' => 'submitter', 'value' => ''];
+                    continue;
+                }
+                $value = trim($r['value'] ?? '');
+                if ($value === '') continue;
+                if ($type === 'specific_email' && !filter_var($value, FILTER_VALIDATE_EMAIL)) continue;
+                $recipients[] = ['type' => $type, 'value' => $value];
+            }
+
+            $reminders[] = ['field_slug' => $slug, 'days_before' => $days, 'recipients' => $recipients];
+        }
+        return empty($reminders) ? null : $reminders;
     }
 
     private function buildStageFields(): ?array

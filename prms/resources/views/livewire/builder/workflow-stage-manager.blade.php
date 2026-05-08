@@ -206,6 +206,115 @@
                     <p class="text-xs text-amber-500">Requires SMTP configured in <code class="bg-amber-100 px-1 rounded">.env</code> — free options: Brevo, Resend, Gmail App Password.</p>
                 </div>
 
+                {{-- Date Field Reminders — email N days before a date field value --}}
+                @php $dateStageFields = collect($stageFields)->filter(fn($sf) => ($sf['type'] ?? '') === 'date')->values(); @endphp
+                @if($dateStageFields->isNotEmpty())
+                <div class="md:col-span-2 border rounded-lg p-4 bg-sky-50 space-y-3">
+                    <div class="flex items-center justify-between">
+                        <p class="text-sm font-semibold text-sky-800">Date Field Reminders
+                            <span class="font-normal text-sky-600 text-xs ml-1">— send email N days before a date field value</span>
+                        </p>
+                        <button type="button" wire:click="addDateReminder"
+                            class="text-xs bg-sky-600 text-white px-2.5 py-1 rounded hover:bg-sky-700 font-bold">
+                            + Add Reminder
+                        </button>
+                    </div>
+                    @if(empty($dateReminders))
+                        <p class="text-xs text-sky-400 italic">No reminders — click "+ Add Reminder" to configure date-based email alerts.</p>
+                    @else
+                        <div class="space-y-3">
+                            @foreach($dateReminders as $di => $dr)
+                            <div class="bg-white rounded p-3 border border-sky-200 space-y-3">
+                                <div class="flex items-start gap-3">
+                                    <div class="flex-1 grid grid-cols-1 md:grid-cols-2 gap-3">
+                                        <div>
+                                            <label class="block text-xs font-medium text-gray-600">Date Field</label>
+                                            <select wire:model="dateReminders.{{ $di }}.field_slug"
+                                                class="mt-1 block w-full rounded border-gray-300 shadow-sm focus:border-sky-500 focus:ring-sky-500 text-sm">
+                                                <option value="">— select field —</option>
+                                                @foreach($dateStageFields as $dsf)
+                                                    @php $slug = \Illuminate\Support\Str::slug($dsf['name'] ?? '', '_'); @endphp
+                                                    <option value="{{ $slug }}">{{ $dsf['name'] }}</option>
+                                                @endforeach
+                                            </select>
+                                        </div>
+                                        <div>
+                                            <label class="block text-xs font-medium text-gray-600">Days Before</label>
+                                            <input type="number" wire:model="dateReminders.{{ $di }}.days_before" min="1" max="365"
+                                                class="mt-1 block w-full rounded border-gray-300 shadow-sm focus:border-sky-500 focus:ring-sky-500 text-sm">
+                                        </div>
+                                    </div>
+                                    <button type="button" wire:click="removeDateReminder({{ $di }})"
+                                        class="mt-5 text-red-400 hover:text-red-600 text-sm font-bold leading-none">✕</button>
+                                </div>
+                                {{-- Recipients --}}
+                                <div class="space-y-2 pl-1">
+                                    <div class="flex items-center justify-between">
+                                        <p class="text-xs font-semibold text-gray-600">Recipients</p>
+                                        <button type="button" wire:click="addDateReminderRecipient({{ $di }})"
+                                            class="text-xs text-sky-600 hover:text-sky-800 font-bold">+ Add</button>
+                                    </div>
+                                    @if(empty($dr['recipients']))
+                                        <p class="text-xs text-gray-400 italic">No recipients yet.</p>
+                                    @else
+                                        @foreach($dr['recipients'] as $ri => $rr)
+                                        <div class="flex items-start gap-2 bg-sky-50 rounded p-2 border border-sky-100">
+                                            <div class="flex-1 grid grid-cols-1 md:grid-cols-2 gap-2">
+                                                <div>
+                                                    <select wire:model.live="dateReminders.{{ $di }}.recipients.{{ $ri }}.type"
+                                                        class="block w-full rounded border-gray-300 shadow-sm focus:border-sky-500 focus:ring-sky-500 text-xs">
+                                                        <option value="submitter">Submitter</option>
+                                                        <option value="role">Role</option>
+                                                        <option value="specific_user">Specific User</option>
+                                                        <option value="specific_email">Specific Email</option>
+                                                    </select>
+                                                </div>
+                                                @if(($rr['type'] ?? 'submitter') === 'role')
+                                                <div>
+                                                    <select wire:model="dateReminders.{{ $di }}.recipients.{{ $ri }}.value"
+                                                        class="block w-full rounded border-gray-300 shadow-sm focus:border-sky-500 focus:ring-sky-500 text-xs">
+                                                        <option value="">— select role —</option>
+                                                        @foreach($roles as $role)
+                                                            <option value="{{ $role->name }}">{{ $role->name }}</option>
+                                                        @endforeach
+                                                    </select>
+                                                </div>
+                                                @elseif(($rr['type'] ?? '') === 'specific_user')
+                                                <div>
+                                                    <select wire:model="dateReminders.{{ $di }}.recipients.{{ $ri }}.value"
+                                                        class="block w-full rounded border-gray-300 shadow-sm focus:border-sky-500 focus:ring-sky-500 text-xs">
+                                                        <option value="">— select user —</option>
+                                                        @foreach($users as $user)
+                                                            <option value="{{ $user->id }}">{{ $user->name }}</option>
+                                                        @endforeach
+                                                    </select>
+                                                </div>
+                                                @elseif(($rr['type'] ?? '') === 'specific_email')
+                                                <div>
+                                                    <input type="email" wire:model="dateReminders.{{ $di }}.recipients.{{ $ri }}.value"
+                                                        placeholder="email@example.com"
+                                                        class="block w-full rounded border-gray-300 shadow-sm focus:border-sky-500 focus:ring-sky-500 text-xs">
+                                                </div>
+                                                @else
+                                                <div class="flex items-center">
+                                                    <p class="text-xs text-gray-400 italic">Record creator's email</p>
+                                                </div>
+                                                @endif
+                                            </div>
+                                            <button type="button" wire:click="removeDateReminderRecipient({{ $di }}, {{ $ri }})"
+                                                class="text-red-400 hover:text-red-600 text-xs font-bold leading-none mt-1">✕</button>
+                                        </div>
+                                        @endforeach
+                                    @endif
+                                </div>
+                            </div>
+                            @endforeach
+                        </div>
+                    @endif
+                    <p class="text-xs text-sky-500">Reminders run daily at 07:00. Requires SMTP configured in <code class="bg-sky-100 px-1 rounded">.env</code>.</p>
+                </div>
+                @endif
+
                 {{-- Stage Fields — custom fields filled by the reviewer in the approval panel --}}
                 <div class="md:col-span-2 border rounded-lg p-4 bg-teal-50 space-y-3">
                     <div class="flex items-center justify-between">
@@ -390,6 +499,9 @@
                                     @endif
                                     @if(!empty($stage->notify_on_enter_json))
                                         <span class="px-1.5 py-0.5 rounded text-[10px] font-bold bg-amber-100 text-amber-700">✉ {{ count($stage->notify_on_enter_json) }} notif{{ count($stage->notify_on_enter_json) > 1 ? 's' : '' }}</span>
+                                    @endif
+                                    @if(!empty($stage->date_reminders_json))
+                                        <span class="px-1.5 py-0.5 rounded text-[10px] font-bold bg-sky-100 text-sky-700">⏰ {{ count($stage->date_reminders_json) }} reminder{{ count($stage->date_reminders_json) > 1 ? 's' : '' }}</span>
                                     @endif
                                 </p>
                             </div>
