@@ -98,6 +98,54 @@
         </div>
         @endif
 
+        {{-- Upcoming TRC Schedule --}}
+        <div class="bg-white rounded-lg shadow-sm overflow-hidden">
+            <div class="px-5 py-4 border-b border-gray-100 flex items-center justify-between">
+                <div class="flex items-center gap-2">
+                    <span class="w-2.5 h-2.5 rounded-full bg-indigo-500 inline-block"></span>
+                    <h3 class="text-sm font-bold text-gray-700 uppercase tracking-wide">Upcoming TRC Schedule</h3>
+                </div>
+                <button wire:click="togglePastTrc" class="text-xs font-medium {{ $showPastTrc ? 'text-indigo-600 underline' : 'text-gray-400 hover:text-indigo-600' }}">
+                    {{ $showPastTrc ? 'Hide Past' : 'Show Past' }}
+                </button>
+            </div>
+            <div class="overflow-x-auto">
+                <table class="w-full text-sm">
+                    <thead class="bg-gray-50 text-xs uppercase text-gray-500 font-semibold">
+                        <tr>
+                            <th class="px-5 py-3 text-left">Date Scheduled</th>
+                            <th class="px-5 py-3 text-left">Title</th>
+                            <th class="px-5 py-3 text-right"></th>
+                        </tr>
+                    </thead>
+                    <tbody class="divide-y divide-gray-100">
+                        @forelse($trcSchedule as $rec)
+                        @php
+                            $dateScheduled = $rec->data['date_scheduled'] ?? null;
+                            $isPast = $dateScheduled && \Carbon\Carbon::parse($dateScheduled)->startOfDay()->isPast();
+                        @endphp
+                        <tr class="hover:bg-gray-50 {{ $isPast ? 'opacity-60' : '' }}">
+                            <td class="px-5 py-3 font-semibold {{ $isPast ? 'text-gray-400' : 'text-indigo-700' }} whitespace-nowrap">
+                                {{ $dateScheduled ? \Carbon\Carbon::parse($dateScheduled)->format('M d, Y') : '—' }}
+                                @if($isPast)
+                                    <span class="ml-1 text-xs font-normal text-gray-400">(past)</span>
+                                @endif
+                            </td>
+                            <td class="px-5 py-3 text-gray-800">{{ $rec->data['title'] ?? '—' }}</td>
+                            <td class="px-5 py-3 text-right">
+                                <a href="{{ route('dynamic.show', [$rec->module->slug, $rec->id]) }}" wire:navigate class="text-xs text-indigo-600 hover:underline font-medium">View →</a>
+                            </td>
+                        </tr>
+                        @empty
+                        <tr>
+                            <td colspan="3" class="px-5 py-8 text-center text-sm text-gray-400 italic">No upcoming TRC schedules.</td>
+                        </tr>
+                        @endforelse
+                    </tbody>
+                </table>
+            </div>
+        </div>
+
         {{-- Activity + Notifications --}}
         <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
             <div class="bg-white overflow-hidden shadow-sm sm:rounded-lg p-6">

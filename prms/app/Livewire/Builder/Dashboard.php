@@ -11,9 +11,16 @@ use Livewire\Attributes\Layout;
 
 class Dashboard extends Component
 {
+    public bool $showPastTrc = false;
+
     public function markAllRead(): void
     {
         auth()->user()->unreadNotifications->markAsRead();
+    }
+
+    public function togglePastTrc(): void
+    {
+        $this->showPastTrc = !$this->showPastTrc;
     }
 
     #[Layout('layouts.app')]
@@ -81,6 +88,15 @@ class Dashboard extends Component
             'approved' => $statRows->get($m->id)?->approved ?? 0,
         ]);
 
+        // TRC Schedule — records with date_scheduled set (filled after TRC Scheduling stage submission)
+        $trcSchedule = Record::whereRaw("JSON_UNQUOTE(JSON_EXTRACT(data, '$.date_scheduled')) IS NOT NULL")
+            ->whereRaw("JSON_UNQUOTE(JSON_EXTRACT(data, '$.date_scheduled')) != ''")
+            ->with(['module'])
+            ->get()
+            ->when(!$this->showPastTrc, fn($c) => $c->filter(fn($r) => !now()->startOfDay()->gt(\Carbon\Carbon::parse($r->data['date_scheduled']))))
+            ->sortBy(fn($r) => $r->data['date_scheduled'])
+            ->values();
+
         // Recent activity (last 10 history entries)
         $recentActivity = RecordHistory::with(['user', 'record.module'])
             ->latest()
@@ -94,7 +110,7 @@ class Dashboard extends Component
         return view('livewire.builder.dashboard', compact(
             'totalRecords', 'completedCount', 'underReviewCount', 'submittedCount', 'returnedCount',
             'statusChartData', 'trendChartData', 'moduleStats',
-            'recentActivity', 'notifications', 'unreadCount'
+            'trcSchedule', 'recentActivity', 'notifications', 'unreadCount'
         ));
     }
 }
