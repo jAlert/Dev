@@ -19,7 +19,7 @@ use App\Livewire\Builder\AuditLog;
 use App\Livewire\Builder\WebhookManager;
 use App\Livewire\Builder\ApiManager;
 
-Route::view('/', 'welcome');
+Route::redirect('/', '/login');
 
 Route::get('dashboard', Dashboard::class)
     ->middleware(['auth', 'verified'])
@@ -32,6 +32,10 @@ Route::get('/admin/users', UserManagement::class)
 Route::get('/admin/roles', RoleManagement::class)
     ->middleware(['auth', 'verified', 'role:super admin'])
     ->name('admin.roles');
+
+Route::get('/admin/login-slides', \App\Livewire\Admin\LoginSlideManager::class)
+    ->middleware(['auth', 'verified', 'role:super admin'])
+    ->name('admin.login-slides');
 
 Route::view('profile', 'profile')
     ->middleware(['auth'])
