@@ -37,7 +37,7 @@ services:
       - prms
 
   mysql:
-    image: mysql:8.0
+    image: mysql:8.4
     container_name: prms_mysql
     restart: unless-stopped
     environment:
