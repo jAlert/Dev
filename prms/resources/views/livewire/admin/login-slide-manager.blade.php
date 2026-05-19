@@ -154,7 +154,7 @@
                     @error('image') <p class="text-red-500 text-xs mt-1">{{ $message }}</p> @enderror
                     <div wire:loading wire:target="image" class="text-xs text-blue-500 mt-1">Uploading…</div>
                     <p class="text-[11px] text-gray-400 mt-1.5 leading-snug">
-                        Recommended: <span class="font-medium text-gray-500">800 × 600 px</span> (4:3 ratio) · PNG or JPG · max 5 MB
+                        Recommended: <span class="font-medium text-gray-500">1200 × 900 px</span> minimum · portrait or square works best · PNG or JPG · max 5 MB
                     </p>
                 </div>
 

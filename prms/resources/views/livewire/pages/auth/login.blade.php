@@ -138,8 +138,7 @@ new #[Layout('layouts.login')] class extends Component {
     </div>
 
     {{-- ── RIGHT: Hero Carousel ────────────────────────────── --}}
-    <div class="hidden md:flex md:w-[55%] bg-blue-600 flex-col items-center justify-center relative overflow-hidden select-none"
-        x-data="{
+    <div class="hidden md:flex md:w-[55%] bg-blue-600 relative overflow-hidden select-none" x-data="{
              slides: @js($slides),
              current: 0,
              startX: 0,
@@ -159,107 +158,57 @@ new #[Layout('layouts.login')] class extends Component {
              }
          }" @touchstart="onTouchStart($event)" @touchend="onTouchEnd($event)">
 
-        {{-- Background circles (decorative) --}}
-        <div class="absolute inset-0 flex items-center justify-center pointer-events-none">
-            <div class="w-80 h-80 rounded-full bg-blue-500/30"></div>
-        </div>
-        <div class="absolute inset-0 flex items-center justify-center pointer-events-none">
-            <div class="w-56 h-56 rounded-full bg-blue-500/30"></div>
-        </div>
-
-        {{-- Slide content --}}
-        <div class="relative z-10 flex flex-col items-center px-10 text-center w-full">
-
-            {{-- Image area --}}
-            <div class="w-64 h-48 flex items-center justify-center mb-8">
-                <template x-if="total === 0">
-                    {{-- Default illustration when no slides configured --}}
-                    <svg class="w-56 h-44 opacity-90" viewBox="0 0 220 170" fill="none"
-                        xmlns="http://www.w3.org/2000/svg">
-                        <rect x="60" y="20" width="120" height="90" rx="8" fill="white" fill-opacity="0.15"
-                            stroke="white" stroke-opacity="0.4" stroke-width="1.5" />
-                        <rect x="72" y="34" width="55" height="6" rx="3" fill="white" fill-opacity="0.5" />
-                        <rect x="72" y="46" width="40" height="5" rx="2.5" fill="white" fill-opacity="0.3" />
-                        <rect x="72" y="60" width="96" height="5" rx="2.5" fill="white" fill-opacity="0.2" />
-                        <rect x="72" y="70" width="80" height="5" rx="2.5" fill="white" fill-opacity="0.2" />
-                        <rect x="72" y="80" width="88" height="5" rx="2.5" fill="white" fill-opacity="0.2" />
-                        <circle cx="44" cy="78" r="22" fill="white" fill-opacity="0.15" stroke="white"
-                            stroke-opacity="0.4" stroke-width="1.5" />
-                        <path d="M36 78l5 5 9-9" stroke="white" stroke-width="2" stroke-linecap="round"
-                            stroke-linejoin="round" />
-                        <circle cx="176" cy="50" r="18" fill="white" fill-opacity="0.15" stroke="white"
-                            stroke-opacity="0.4" stroke-width="1.5" />
-                        <path d="M168 50h16M176 42v16" stroke="white" stroke-width="2" stroke-linecap="round" />
-                        <circle cx="150" cy="135" r="16" fill="white" fill-opacity="0.15" stroke="white"
-                            stroke-opacity="0.4" stroke-width="1.5" />
-                        <path d="M144 135l4 4 8-8" stroke="white" stroke-width="2" stroke-linecap="round"
-                            stroke-linejoin="round" />
-                    </svg>
+        {{-- Background slides (full cover) --}}
+        <template x-for="(slide, i) in slides" :key="i">
+            <div x-show="current === i" x-transition:enter="transition ease-in-out duration-700"
+                x-transition:enter-start="opacity-0" x-transition:enter-end="opacity-100"
+                x-transition:leave="transition ease-in-out duration-700" x-transition:leave-start="opacity-100"
+                x-transition:leave-end="opacity-0" class="absolute inset-0">
+                <template x-if="slide.image">
+                    <img :src="slide.image" :alt="slide.title" class="w-full h-full object-cover" />
                 </template>
-                <template x-if="total > 0">
-                    <template x-for="(slide, i) in slides" :key="i">
-                        <div x-show="current === i" x-transition:enter="transition ease-out duration-500"
-                            x-transition:enter-start="opacity-0 scale-95" x-transition:enter-end="opacity-100 scale-100"
-                            class="absolute w-64 h-48 flex items-center justify-center">
-                            <template x-if="slide.image">
-                                <img :src="slide.image" :alt="slide.title"
-                                    class="max-w-full max-h-full object-contain rounded-xl shadow-lg" />
-                            </template>
-                            <template x-if="!slide.image">
-                                <svg class="w-40 h-32 opacity-60" viewBox="0 0 160 120" fill="none">
-                                    <rect x="10" y="10" width="140" height="100" rx="8" fill="white" fill-opacity="0.2"
-                                        stroke="white" stroke-opacity="0.4" stroke-width="1.5" />
-                                    <path d="M10 85l35-30 25 22 30-35 50 48" stroke="white" stroke-opacity="0.5"
-                                        stroke-width="2" stroke-linejoin="round" />
-                                    <circle cx="55" cy="45" r="12" fill="white" fill-opacity="0.3" />
-                                </svg>
-                            </template>
-                        </div>
-                    </template>
+                <template x-if="!slide.image">
+                    <div class="w-full h-full bg-blue-600"></div>
                 </template>
             </div>
+        </template>
 
-            {{-- Text content --}}
-            <template x-if="total === 0">
-                <div>
-                    <p class="text-white font-bold text-lg leading-snug">DENR-BMB Policy Review<br>and Monitoring System
-                    </p>
-                    <p class="text-blue-200 text-sm mt-2">One-stop policy tracking and management.</p>
-                </div>
-            </template>
-            <template x-if="total > 0">
-                <template x-for="(slide, i) in slides" :key="'text-'+i">
-                    <div x-show="current === i" x-transition:enter="transition ease-out duration-500"
-                        x-transition:enter-start="opacity-0 translate-y-2"
-                        x-transition:enter-end="opacity-100 translate-y-0">
-                        <p class="text-white font-bold text-lg leading-snug" x-text="slide.title"></p>
-                        <p class="text-blue-200 text-sm mt-2" x-text="slide.subtitle ?? ''"></p>
-                    </div>
+        {{-- Fallback when no slides --}}
+        <template x-if="total === 0">
+            <div class="absolute inset-0 bg-blue-600 flex items-center justify-center">
+                <svg class="w-48 h-40 opacity-30" viewBox="0 0 220 170" fill="none" xmlns="http://www.w3.org/2000/svg">
+                    <rect x="60" y="20" width="120" height="90" rx="8" fill="white" fill-opacity="0.4" stroke="white"
+                        stroke-opacity="0.6" stroke-width="1.5" />
+                    <rect x="72" y="34" width="55" height="6" rx="3" fill="white" fill-opacity="0.7" />
+                    <rect x="72" y="46" width="40" height="5" rx="2.5" fill="white" fill-opacity="0.5" />
+                    <rect x="72" y="60" width="96" height="5" rx="2.5" fill="white" fill-opacity="0.3" />
+                    <rect x="72" y="70" width="80" height="5" rx="2.5" fill="white" fill-opacity="0.3" />
+                    <rect x="72" y="80" width="88" height="5" rx="2.5" fill="white" fill-opacity="0.3" />
+                </svg>
+            </div>
+        </template>
+
+        {{-- Dot indicators — inset overlay so positioning is reliable --}}
+        <div class="absolute inset-0 flex flex-col justify-end z-20 pointer-events-none" style="padding-bottom: 40px;">
+            <div x-show="total > 1" class="flex items-center justify-center gap-2 pointer-events-auto">
+                <template x-for="(_, i) in slides" :key="'dot-'+i">
+                    <button @click="current = i"
+                        :class="current === i ? 'w-5 bg-white' : 'w-2 bg-white/50 hover:bg-white/70'"
+                        class="h-2 rounded-full transition-all duration-300 focus:outline-none">
+                    </button>
                 </template>
-            </template>
-
-            {{-- Dot indicators --}}
-            <template x-if="total > 1">
-                <div class="flex items-center gap-2 mt-6">
-                    <template x-for="(_, i) in slides" :key="'dot-'+i">
-                        <button @click="current = i"
-                            :class="current === i ? 'w-5 bg-white' : 'w-2 bg-white/40 hover:bg-white/60'"
-                            class="h-2 rounded-full transition-all duration-300 focus:outline-none">
-                        </button>
-                    </template>
-                </div>
-            </template>
+            </div>
         </div>
 
         {{-- Swipe arrows --}}
         <button x-show="total > 1" @click="prev()"
-            class="absolute left-3 top-1/2 -translate-y-1/2 z-20 w-8 h-8 rounded-full bg-white/20 hover:bg-white/30 flex items-center justify-center text-white transition">
+            class="absolute left-3 top-1/2 -translate-y-1/2 z-20 w-8 h-8 rounded-full bg-black/20 hover:bg-black/30 flex items-center justify-center text-white transition">
             <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7" />
             </svg>
         </button>
         <button x-show="total > 1" @click="next()"
-            class="absolute right-3 top-1/2 -translate-y-1/2 z-20 w-8 h-8 rounded-full bg-white/20 hover:bg-white/30 flex items-center justify-center text-white transition">
+            class="absolute right-3 top-1/2 -translate-y-1/2 z-20 w-8 h-8 rounded-full bg-black/20 hover:bg-black/30 flex items-center justify-center text-white transition">
             <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7" />
             </svg>
