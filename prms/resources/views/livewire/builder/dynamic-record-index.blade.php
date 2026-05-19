@@ -18,49 +18,73 @@
     <div class="max-w-7xl mx-auto sm:px-6 lg:px-8 space-y-4">
 
         {{-- Filter Bar --}}
-        <div class="bg-white shadow-sm sm:rounded-lg p-4">
-            <div class="grid grid-cols-1 md:grid-cols-3 lg:grid-cols-4 gap-3">
-                {{-- Search --}}
-                <div class="lg:col-span-2">
+        <div class="bg-white shadow-sm sm:rounded-lg p-4"
+             x-data="{ open: {{ ($statusFilter || $stageFilter || $dateFrom || $dateTo) ? 'true' : 'false' }} }">
+
+            {{-- Always-visible row: search + toggle --}}
+            <div class="flex items-end gap-3">
+                <div class="flex-1">
                     <label class="block text-xs font-semibold text-gray-500 uppercase mb-1">Search</label>
-                    <input type="text" wire:model.live.debounce.400ms="search" placeholder="Search all fields..." class="block w-full rounded border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 text-sm">
+                    <input type="text" wire:model.live.debounce.400ms="search" placeholder="Search all fields..."
+                           class="block w-full rounded border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 text-sm">
                 </div>
-                {{-- Status filter --}}
-                <div>
-                    <label class="block text-xs font-semibold text-gray-500 uppercase mb-1">Status</label>
-                    <select wire:model.live="statusFilter" class="block w-full rounded border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 text-sm">
-                        <option value="">All statuses</option>
-                        @foreach($allStatuses as $st)
-                            <option value="{{ $st }}">{{ $st }}</option>
-                        @endforeach
-                    </select>
-                </div>
-                {{-- Stage filter --}}
-                @if($stages->isNotEmpty())
-                <div>
-                    <label class="block text-xs font-semibold text-gray-500 uppercase mb-1">Approval Stage</label>
-                    <select wire:model.live="stageFilter" class="block w-full rounded border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 text-sm">
-                        <option value="">All stages</option>
-                        <option value="none">No stage (not submitted)</option>
-                        @foreach($stages as $stage)
-                            <option value="{{ $stage->id }}">{{ $stage->name }}</option>
-                        @endforeach
-                    </select>
-                </div>
-                @endif
-                {{-- Date From --}}
-                <div>
-                    <label class="block text-xs font-semibold text-gray-500 uppercase mb-1">Created From</label>
-                    <input type="date" wire:model.live="dateFrom" class="block w-full rounded border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 text-sm">
-                </div>
-                {{-- Date To --}}
-                <div>
-                    <label class="block text-xs font-semibold text-gray-500 uppercase mb-1">Created To</label>
-                    <input type="date" wire:model.live="dateTo" class="block w-full rounded border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 text-sm">
-                </div>
-                {{-- Clear button --}}
-                <div class="flex items-end">
-                    <button wire:click="clearFilters" class="text-xs text-indigo-600 hover:text-indigo-900 font-medium border border-indigo-300 rounded px-3 py-2 hover:bg-indigo-50">Clear Filters</button>
+                <button @click="open = !open"
+                        class="flex items-center gap-1 pb-2 text-xs font-medium text-indigo-600 hover:text-indigo-900 whitespace-nowrap select-none">
+                    Advanced filter
+                    <svg class="w-3.5 h-3.5 transition-transform duration-200" :class="{ 'rotate-180': open }"
+                         fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/>
+                    </svg>
+                </button>
+            </div>
+
+            {{-- Collapsible advanced filters --}}
+            <div x-show="open"
+                 x-transition:enter="transition ease-out duration-150"
+                 x-transition:enter-start="opacity-0 -translate-y-1"
+                 x-transition:enter-end="opacity-100 translate-y-0"
+                 x-transition:leave="transition ease-in duration-100"
+                 x-transition:leave-start="opacity-100 translate-y-0"
+                 x-transition:leave-end="opacity-0 -translate-y-1"
+                 class="mt-3 pt-3 border-t">
+                <div class="grid grid-cols-1 md:grid-cols-3 lg:grid-cols-4 gap-3">
+                    {{-- Status filter --}}
+                    <div>
+                        <label class="block text-xs font-semibold text-gray-500 uppercase mb-1">Status</label>
+                        <select wire:model.live="statusFilter" class="block w-full rounded border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 text-sm">
+                            <option value="">All statuses</option>
+                            @foreach($allStatuses as $st)
+                                <option value="{{ $st }}">{{ $st }}</option>
+                            @endforeach
+                        </select>
+                    </div>
+                    {{-- Stage filter --}}
+                    @if($stages->isNotEmpty())
+                    <div>
+                        <label class="block text-xs font-semibold text-gray-500 uppercase mb-1">Approval Stage</label>
+                        <select wire:model.live="stageFilter" class="block w-full rounded border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 text-sm">
+                            <option value="">All stages</option>
+                            <option value="none">No stage (not submitted)</option>
+                            @foreach($stages as $stage)
+                                <option value="{{ $stage->id }}">{{ $stage->name }}</option>
+                            @endforeach
+                        </select>
+                    </div>
+                    @endif
+                    {{-- Date From --}}
+                    <div>
+                        <label class="block text-xs font-semibold text-gray-500 uppercase mb-1">Created From</label>
+                        <input type="date" wire:model.live="dateFrom" class="block w-full rounded border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 text-sm">
+                    </div>
+                    {{-- Date To --}}
+                    <div>
+                        <label class="block text-xs font-semibold text-gray-500 uppercase mb-1">Created To</label>
+                        <input type="date" wire:model.live="dateTo" class="block w-full rounded border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 text-sm">
+                    </div>
+                    {{-- Clear --}}
+                    <div class="flex items-end">
+                        <button wire:click="clearFilters" class="text-xs text-indigo-600 hover:text-indigo-900 font-medium border border-indigo-300 rounded px-3 py-2 hover:bg-indigo-50">Clear Filters</button>
+                    </div>
                 </div>
             </div>
         </div>
