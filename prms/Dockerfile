@@ -1,16 +1,15 @@
-FROM php:8.4-fpm
+FROM php:8.4-fpm-bookworm
 
-# Replace apt sources with explicit HTTP mirrors (avoids SSL interception)
-# Use OS codename dynamically so this works on both Bookworm and Trixie base images
+# Use HTTPS for Debian mirrors to bypass CDN issues
 RUN echo 'Acquire::ForceIPv4 "true";' > /etc/apt/apt.conf.d/99force-ipv4 \
     && CODENAME=$(. /etc/os-release && echo $VERSION_CODENAME) \
     && rm -f /etc/apt/sources.list.d/debian.sources \
-    && echo "deb http://deb.debian.org/debian $CODENAME main" > /etc/apt/sources.list \
-    && echo "deb http://deb.debian.org/debian $CODENAME-updates main" >> /etc/apt/sources.list \
-    && echo "deb http://security.debian.org/debian-security $CODENAME-security main" >> /etc/apt/sources.list
+    && echo "deb https://deb.debian.org/debian $CODENAME main" > /etc/apt/sources.list \
+    && echo "deb https://deb.debian.org/debian $CODENAME-updates main" >> /etc/apt/sources.list \
+    && echo "deb https://security.debian.org/debian-security $CODENAME-security main" >> /etc/apt/sources.list
 
 # System dependencies
-RUN apt-get update && apt-get upgrade -y && apt-get install -y \
+RUN apt-get update -o Acquire::http::Timeout=300 || true && apt-get install -y --no-install-recommends \
         git curl zip unzip libzip-dev \
         libpng-dev libjpeg-dev libfreetype6-dev \
         libxml2-dev libonig-dev \
