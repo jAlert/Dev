@@ -144,7 +144,7 @@ class DynamicRecordForm extends Component
                 $file = $this->data[$field->slug];
                 if (is_object($file) && method_exists($file, 'store')) {
                     $this->validate([
-                        'data.' . $field->slug => 'file|max:20480|mimes:pdf,doc,docx,xls,xlsx,png,jpg,jpeg,gif,zip|extensions:pdf,doc,docx,xls,xlsx,png,jpg,jpeg,gif,zip',
+                        'data.' . $field->slug => 'file|max:51200|mimes:pdf,doc,docx,xls,xlsx,png,jpg,jpeg,gif,zip|extensions:pdf,doc,docx,xls,xlsx,png,jpg,jpeg,gif,zip',
                     ]);
                     $path = $file->store('attachments', 'public');
 

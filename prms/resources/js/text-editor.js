@@ -1763,10 +1763,18 @@ class TextEditorInstance {
     this.debounceTimer = setTimeout(() => {
       const current = editor.getText()
       if (current !== this.lastContent && this.lastContent !== '') {
-        const action  = current.length > this.lastContent.length ? 'insert' : 'delete'
+        const action = current.length > this.lastContent.length ? 'insert' : 'delete'
+
+        // Find common prefix and suffix to isolate what actually changed
+        let start = 0
+        const oldLen = this.lastContent.length, newLen = current.length
+        while (start < oldLen && start < newLen && this.lastContent[start] === current[start]) start++
+        let endOld = oldLen - 1, endNew = newLen - 1
+        while (endOld >= start && endNew >= start && this.lastContent[endOld] === current[endNew]) { endOld--; endNew-- }
+
         const snippet = (action === 'insert'
-          ? current.slice(this.lastContent.length - 1)
-          : this.lastContent.slice(current.length - 1)).slice(0, 200).trim()
+          ? current.slice(start, endNew + 1)
+          : this.lastContent.slice(start, endOld + 1)).slice(0, 200).trim()
 
         if (!snippet) { this.lastContent = current; return }
 
@@ -1801,16 +1809,18 @@ class TextEditorInstance {
       }
 
       this.historyList.innerHTML = data.map(entry => `
-        <div class="flex items-start gap-2 py-1 border-b border-gray-50 last:border-0">
-          <span class="flex-shrink-0 w-12 text-right font-mono ${entry.action === 'insert' ? 'text-emerald-600' : 'text-rose-500'}">
-            ${entry.action === 'insert' ? '+' : '−'}
-          </span>
-          <span class="flex-1 truncate text-gray-700" title="${entry.content?.replace(/"/g, '&quot;')}">
+        <div style="padding:6px 0;border-bottom:1px solid #f3f4f6;">
+          <div style="display:flex;align-items:center;gap:6px;margin-bottom:3px;">
+            <span style="font-size:11px;font-weight:600;padding:1px 5px;border-radius:3px;${entry.action === 'insert' ? 'background:#dcfce7;color:#16a34a;' : 'background:#fee2e2;color:#dc2626;'}">
+              ${entry.action === 'insert' ? 'inserted' : 'deleted'}
+            </span>
+            <span style="font-size:11px;color:#6b7280;flex:1;text-align:right;">
+              ${entry.user_name} · ${new Date(entry.created_at).toLocaleTimeString()}
+            </span>
+          </div>
+          <div style="font-size:11px;color:#374151;word-break:break-word;overflow-wrap:break-word;background:${entry.action === 'insert' ? '#f0fdf4' : '#fff1f2'};border-left:3px solid ${entry.action === 'insert' ? '#86efac' : '#fca5a5'};padding:4px 6px;border-radius:0 3px 3px 0;">
             ${entry.content || '—'}
-          </span>
-          <span class="flex-shrink-0 text-gray-400 text-right" style="min-width:100px">
-            ${entry.user_name} · ${new Date(entry.created_at).toLocaleTimeString()}
-          </span>
+          </div>
         </div>
       `).join('')
     } catch {

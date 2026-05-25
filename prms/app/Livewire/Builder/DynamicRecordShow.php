@@ -264,7 +264,7 @@ class DynamicRecordShow extends Component
             ->pluck('slug')->flip();
         if (!isset($allowedSlugs[$fieldSlug])) abort(422);
 
-        $this->validate(['reviewerAttachment' => 'file|max:20480|mimes:pdf,doc,docx,xls,xlsx,png,jpg,jpeg,gif,zip|extensions:pdf,doc,docx,xls,xlsx,png,jpg,jpeg,gif,zip']);
+        $this->validate(['reviewerAttachment' => 'file|max:51200|mimes:pdf,doc,docx,xls,xlsx,png,jpg,jpeg,gif,zip|extensions:pdf,doc,docx,xls,xlsx,png,jpg,jpeg,gif,zip']);
 
         $path = $this->reviewerAttachment->store('attachments', 'public');
         $data = $this->record->data;

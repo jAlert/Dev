@@ -268,9 +268,40 @@
                                     $versionedVal = $recordId ? ($record->data[$field->slug] ?? null) : null;
                                     $isVersioned = $field->versioning;
                                 @endphp
-                                <input type="file" wire:model="data.{{ $field->slug }}"
-                                    class="mt-1 block w-full text-sm text-gray-500 file:mr-4 file:py-2 file:px-4 file:rounded-md file:border-0 file:text-sm file:font-semibold file:bg-indigo-50 file:text-indigo-700 hover:file:bg-indigo-100">
-                                <div wire:loading wire:target="data.{{ $field->slug }}" class="text-xs text-gray-500 mt-1">Uploading...</div>
+                                <div x-data="{ progress: 0, uploading: false, sizeError: false }">
+                                    <input type="file"
+                                        x-on:change="
+                                            const f = $event.target.files[0];
+                                            if (!f) return;
+                                            if (f.size > 52428800) {
+                                                sizeError = true;
+                                                $event.target.value = '';
+                                                return;
+                                            }
+                                            sizeError = false;
+                                            uploading = true;
+                                            progress = 0;
+                                            $wire.upload(
+                                                'data.{{ $field->slug }}',
+                                                f,
+                                                () => { uploading = false; },
+                                                () => { uploading = false; },
+                                                (e) => { progress = e.detail.progress; }
+                                            );
+                                        "
+                                        class="mt-1 block w-full text-sm text-gray-500 file:mr-4 file:py-2 file:px-4 file:rounded-md file:border-0 file:text-sm file:font-semibold file:bg-indigo-50 file:text-indigo-700 hover:file:bg-indigo-100">
+                                    <p x-show="sizeError" x-cloak class="mt-1 text-xs text-red-600 font-medium">File exceeds the 50 MB limit.</p>
+                                    <p x-show="!sizeError" class="mt-1 text-xs text-gray-400">Max 50 MB</p>
+                                    <div x-show="uploading" x-cloak class="mt-2">
+                                        <div class="flex items-center justify-between mb-1">
+                                            <span class="text-xs text-gray-500">Uploading...</span>
+                                            <span class="text-xs font-semibold text-indigo-600" x-text="progress + '%'"></span>
+                                        </div>
+                                        <div class="w-full bg-gray-200 rounded-full h-1.5">
+                                            <div class="bg-indigo-500 h-1.5 rounded-full transition-all duration-300" :style="'width: ' + progress + '%'"></div>
+                                        </div>
+                                    </div>
+                                </div>
 
                                 @if($isVersioned)
                                     @php $versions = is_array($versionedVal) ? $versionedVal : (is_string($versionedVal) && !empty($versionedVal) ? [['path' => $versionedVal, 'original_name' => basename($versionedVal), 'uploaded_at' => null, 'uploaded_by_name' => null]] : []); @endphp
@@ -303,7 +334,7 @@
                                         </div>
                                     @endif
                                 @elseif(isset($data[$field->slug]) && is_string($data[$field->slug]) && !empty($data[$field->slug]) && !is_object($data[$field->slug]))
-                                    <div class="mt-2 text-sm"><a href="{{ Storage::url($data[$field->slug]) }}" target="_blank" class="text-indigo-600 hover:underline">View current attachment</a></div>
+                                    <div class="mt-2 text-sm"><a href="{{ Storage::url($data[$field->slug]) }}" target="_blank" class="text-indigo-600 hover:underline">{{ basename($data[$field->slug]) }}</a></div>
                                 @endif
                             @endif
                             

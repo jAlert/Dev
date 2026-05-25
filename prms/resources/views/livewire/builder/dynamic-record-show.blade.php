@@ -298,18 +298,56 @@
                                     <div class="mb-1 text-xs">
                                         <a href="{{ Storage::url($val) }}" target="_blank" class="text-indigo-600 hover:underline inline-flex items-center gap-1">
                                             <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15.172 7l-6.586 6.586a2 2 0 102.828 2.828l6.414-6.586a4 4 0 00-5.656-5.656l-6.415 6.585a6 6 0 108.486 8.486L20.5 13"/></svg>
-                                            Current file
+                                            {{ basename($val) }}
                                         </a>
                                         <span class="text-gray-400 ml-1">— upload to replace</span>
                                     </div>
                                 @endif
-                                <div class="flex items-center gap-2">
-                                    <input type="file" wire:model="reviewerAttachment" class="block flex-1 text-sm text-gray-600 file:mr-2 file:py-1 file:px-2 file:rounded file:border-0 file:text-xs file:font-semibold file:bg-teal-50 file:text-teal-700">
-                                    <button wire:click="attachStageFile('{{ $slug }}')" wire:loading.attr="disabled"
-                                        class="whitespace-nowrap bg-teal-600 text-white px-3 py-1.5 rounded hover:bg-teal-700 font-bold text-xs disabled:opacity-50">
-                                        <span wire:loading.remove wire:target="attachStageFile('{{ $slug }}')">Attach</span>
-                                        <span wire:loading wire:target="attachStageFile('{{ $slug }}')">…</span>
-                                    </button>
+                                <div x-data="{ progress: 0, uploading: false, sizeError: false, pendingFile: null }">
+                                    <div class="flex items-center gap-2">
+                                        <input type="file"
+                                            x-on:change="
+                                                const f = $event.target.files[0];
+                                                if (!f) return;
+                                                if (f.size > 52428800) {
+                                                    sizeError = true;
+                                                    pendingFile = null;
+                                                    $event.target.value = '';
+                                                    return;
+                                                }
+                                                sizeError = false;
+                                                pendingFile = f;
+                                            "
+                                            class="block flex-1 text-sm text-gray-600 file:mr-2 file:py-1 file:px-2 file:rounded file:border-0 file:text-xs file:font-semibold file:bg-teal-50 file:text-teal-700">
+                                        <button
+                                            :disabled="uploading || !pendingFile"
+                                            x-on:click="
+                                                if (!pendingFile || uploading) return;
+                                                uploading = true; progress = 0;
+                                                $wire.upload(
+                                                    'reviewerAttachment',
+                                                    pendingFile,
+                                                    () => { uploading = false; pendingFile = null; $wire.attachStageFile('{{ $slug }}'); },
+                                                    () => { uploading = false; },
+                                                    (e) => { progress = e.detail.progress; }
+                                                );
+                                            "
+                                            class="whitespace-nowrap bg-teal-600 text-white px-3 py-1.5 rounded hover:bg-teal-700 font-bold text-xs disabled:opacity-50">
+                                            <span x-show="!uploading">Attach</span>
+                                            <span x-show="uploading" x-cloak>…</span>
+                                        </button>
+                                    </div>
+                                    <p x-show="sizeError" x-cloak class="mt-1 text-xs text-red-600 font-medium">File exceeds the 50 MB limit.</p>
+                                    <p x-show="!sizeError" class="mt-1 text-xs text-gray-400">Max 50 MB</p>
+                                    <div x-show="uploading" x-cloak class="mt-2">
+                                        <div class="flex items-center justify-between mb-1">
+                                            <span class="text-xs text-gray-500">Uploading...</span>
+                                            <span class="text-xs font-semibold text-teal-600" x-text="progress + '%'"></span>
+                                        </div>
+                                        <div class="w-full bg-gray-200 rounded-full h-1.5">
+                                            <div class="bg-teal-500 h-1.5 rounded-full transition-all duration-300" :style="'width: ' + progress + '%'"></div>
+                                        </div>
+                                    </div>
                                 </div>
                                 @error('reviewerAttachment') <span class="text-red-500 text-xs">{{ $message }}</span> @enderror
                             @elseif($sfType === 'textarea')
