@@ -74,12 +74,12 @@
                     {{-- Date From --}}
                     <div>
                         <label class="block text-xs font-semibold text-gray-500 uppercase mb-1">Created From</label>
-                        <input type="date" wire:model.live="dateFrom" class="block w-full rounded border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 text-sm">
+                        <input type="date" wire:model.live.debounce.400ms="dateFrom" class="block w-full rounded border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 text-sm">
                     </div>
                     {{-- Date To --}}
                     <div>
                         <label class="block text-xs font-semibold text-gray-500 uppercase mb-1">Created To</label>
-                        <input type="date" wire:model.live="dateTo" class="block w-full rounded border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 text-sm">
+                        <input type="date" wire:model.live.debounce.400ms="dateTo" class="block w-full rounded border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 text-sm">
                     </div>
                     {{-- Clear --}}
                     <div class="flex items-end">

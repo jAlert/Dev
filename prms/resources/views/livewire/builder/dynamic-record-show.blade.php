@@ -322,14 +322,13 @@
                                         <button
                                             :disabled="uploading || !pendingFile"
                                             x-on:click="
-                                                if (!pendingFile || uploading) return;
                                                 uploading = true; progress = 0;
                                                 $wire.upload(
                                                     'reviewerAttachment',
                                                     pendingFile,
                                                     () => { uploading = false; pendingFile = null; $wire.attachStageFile('{{ $slug }}'); },
                                                     () => { uploading = false; },
-                                                    (e) => { progress = e.detail.progress; }
+                                                    (e) => { if (e.detail.progress - progress >= 5 || e.detail.progress === 100) progress = e.detail.progress; }
                                                 );
                                             "
                                             class="whitespace-nowrap bg-teal-600 text-white px-3 py-1.5 rounded hover:bg-teal-700 font-bold text-xs disabled:opacity-50">
@@ -338,7 +337,7 @@
                                         </button>
                                     </div>
                                     <p x-show="sizeError" x-cloak class="mt-1 text-xs text-red-600 font-medium">File exceeds the 50 MB limit.</p>
-                                    <p x-show="!sizeError" class="mt-1 text-xs text-gray-400">Max 50 MB</p>
+                                    <p class="mt-1 text-xs text-gray-400">Max 50 MB</p>
                                     <div x-show="uploading" x-cloak class="mt-2">
                                         <div class="flex items-center justify-between mb-1">
                                             <span class="text-xs text-gray-500">Uploading...</span>

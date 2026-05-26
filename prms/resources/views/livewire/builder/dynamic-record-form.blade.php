@@ -286,12 +286,12 @@
                                                 f,
                                                 () => { uploading = false; },
                                                 () => { uploading = false; },
-                                                (e) => { progress = e.detail.progress; }
+                                                (e) => { if (e.detail.progress - progress >= 5 || e.detail.progress === 100) progress = e.detail.progress; }
                                             );
                                         "
                                         class="mt-1 block w-full text-sm text-gray-500 file:mr-4 file:py-2 file:px-4 file:rounded-md file:border-0 file:text-sm file:font-semibold file:bg-indigo-50 file:text-indigo-700 hover:file:bg-indigo-100">
                                     <p x-show="sizeError" x-cloak class="mt-1 text-xs text-red-600 font-medium">File exceeds the 50 MB limit.</p>
-                                    <p x-show="!sizeError" class="mt-1 text-xs text-gray-400">Max 50 MB</p>
+                                    <p class="mt-1 text-xs text-gray-400">Max 50 MB</p>
                                     <div x-show="uploading" x-cloak class="mt-2">
                                         <div class="flex items-center justify-between mb-1">
                                             <span class="text-xs text-gray-500">Uploading...</span>
